@@ -2,28 +2,31 @@
 
 use Async::Command::Multi;
 
+my %command;
+
 my $CTF-ZDLRA-admin     = 'ctz1dbadm01';
 my @CTF-ZDLRA-cells     = <ctz1celadm01 ctz1celadm02 ctz1celadm03 ctz1celadm04 ctz1celadm05 ctz1celadm06 ctz1celadm07 ctz1celadm08 ctz1celadm09 ctz1celadm10 ctz1celadm11 ctz1celadm12 ctz1celadm13 ctz1celadm14>;
 
 for @CTF-ZDLRA-cells -> $cell {
-    put $cell;
-    my $proc            = run('ssh', $CTF-ZDLRA-admin, 'sudo', 'su', '-', 'root', '-c "ssh ' ~ $cell ~ ' cellcli -e list physicaldisk"', :out, :err);
-    for $proc.out.lines -> $record {
-        my @fields      = $record.trim.split(/\s+/);
-        put "\t" ~ @fields[0..1].join("\t") ~ "\t" ~ @fields[2..*].join(' ') if @fields[2] ne 'normal';
-    }
+    %command{$cell}     =   'ssh', $CTF-ZDLRA-admin, 'sudo', 'su', '-', 'root', '-c', '"ssh ' ~ $cell ~ ' cellcli -e list physicaldisk"';
 }
 
 my $EQX-ZDLRA-admin     = 'jgz1dbadm01';
 my @EQX-ZDLRA-cells     = <jgz1celadm01 jgz1celadm02 jgz1celadm03 jgz1celadm04 jgz1celadm05 jgz1celadm06 jgz1celadm07 jgz1celadm08 jgz1celadm09 jgz1celadm10 jgz1celadm11 jgz1celadm12 jgz1celadm13 jgz1celadm14>;
 
 for @EQX-ZDLRA-cells -> $cell {
+    %command{$cell}     =   'ssh', $EQX-ZDLRA-admin, 'sudo', 'su', '-', 'root', '-c', '"ssh ' ~ $cell ~ ' cellcli -e list physicaldisk"';
+}
+
+my %results             = Async::Command::Multi.new(:%command).sow.reap;
+
+for %results.keys.sort -> $cell {
     put $cell;
-    my $proc            = run('ssh', $EQX-ZDLRA-admin, 'sudo', 'su', '-', 'root', '-c "ssh ' ~ $cell ~ ' cellcli -e list physicaldisk"', :out, :err);
-    for $proc.out.lines -> $record {
+    for %results{$cell}.stdout-results.lines -> $record {
         my @fields      = $record.trim.split(/\s+/);
         put "\t" ~ @fields[0..1].join("\t") ~ "\t" ~ @fields[2..*].join(' ') if @fields[2] ne 'normal';
     }
+
 }
 
 =finish
