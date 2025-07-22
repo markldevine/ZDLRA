@@ -1,8 +1,23 @@
 #!/usr/bin/env raku
 
 use Async::Command::Multi;
+use Data::Dump::Tree;
 
 my %command;
+
+for <ctz1dbadm01 jgz1dbadm01> -> $adm {
+    %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+}
+#my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;
+#ddt %physicaldisk;
+
+for <ctz1dbadm01 jgz1dbadm01> -> $adm {
+    %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list alerthistory"';
+}
+my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
+ddt %alerthistory;
+
+=finish
 
 my $CTF-ZDLRA-admin     = 'ctz1dbadm01';
 my @CTF-ZDLRA-cells     = <ctz1celadm01 ctz1celadm02 ctz1celadm03 ctz1celadm04 ctz1celadm05 ctz1celadm06 ctz1celadm07 ctz1celadm08 ctz1celadm09 ctz1celadm10 ctz1celadm11 ctz1celadm12 ctz1celadm13 ctz1celadm14>;
