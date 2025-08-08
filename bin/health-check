@@ -3,45 +3,93 @@
 use Async::Command::Multi;
 use Data::Dump::Tree;
 
+class PHYSICALDISK_RECORD {
+    has Str         $.name;
+    has Str         $.serial;
+    has Str         $.status;
+}
+
+class ALERTHISTORY_RECORD {
+    has Str         $.name;
+    has DateTime    $.datetime;
+    has Str         $.precedence;
+    has Str         $.message;
+}
+
+my %status;
 my %command;
 
-for <ctz1dbadm01 jgz1dbadm01> -> $adm {
-    %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
-}
-#my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;
-#ddt %physicaldisk;
+#   A028441@jgz1dbadm01.wmata.com:~> sudo dcli -l root -g /root/cell_group 'cellcli -e "list alerthistory WHERE begintime > \"2019-01-01T15:46:30-04:00\""'
 
 for <ctz1dbadm01 jgz1dbadm01> -> $adm {
-    %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list alerthistory"';
+    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list alerthistory"';
 }
-my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
-ddt %alerthistory;
-
-=finish
-
-my $CTF-ZDLRA-admin     = 'ctz1dbadm01';
-my @CTF-ZDLRA-cells     = <ctz1celadm01 ctz1celadm02 ctz1celadm03 ctz1celadm04 ctz1celadm05 ctz1celadm06 ctz1celadm07 ctz1celadm08 ctz1celadm09 ctz1celadm10 ctz1celadm11 ctz1celadm12 ctz1celadm13 ctz1celadm14>;
-
-for @CTF-ZDLRA-cells -> $cell {
-    %command{$cell}     =   'ssh', $CTF-ZDLRA-admin, 'sudo', 'su', '-', 'root', '-c', '"ssh ' ~ $cell ~ ' cellcli -e list physicaldisk"';
-}
-
-my $EQX-ZDLRA-admin     = 'jgz1dbadm01';
-my @EQX-ZDLRA-cells     = <jgz1celadm01 jgz1celadm02 jgz1celadm03 jgz1celadm04 jgz1celadm05 jgz1celadm06 jgz1celadm07 jgz1celadm08 jgz1celadm09 jgz1celadm10 jgz1celadm11 jgz1celadm12 jgz1celadm13 jgz1celadm14>;
-
-for @EQX-ZDLRA-cells -> $cell {
-    %command{$cell}     =   'ssh', $EQX-ZDLRA-admin, 'sudo', 'su', '-', 'root', '-c', '"ssh ' ~ $cell ~ ' cellcli -e list physicaldisk"';
-}
-
-my %results             = Async::Command::Multi.new(:%command).sow.reap;
-
-for %results.keys.sort -> $cell {
-    put $cell;
-    for %results{$cell}.stdout-results.lines -> $record {
-        my @fields      = $record.trim.split(/\s+/);
-        put "\t" ~ @fields[0..1].join("\t") ~ "\t" ~ @fields[2..*].join(' ') if @fields[2] ne 'normal';
+my %alerthistory    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %alerthistory; exit;
+for %alerthistory.keys.sort -> $adm {
+    for %alerthistory{$adm}.stdout-results.lines -> $record {
+        my @fields  = $record.trim.split(/\s+/);
+        %status{$adm}<ALERTHISTORY>.push: ALERTHISTORY_RECORD.new:
+            :name(@fields[1]),
+            :datetime(DateTime.new(@fields[2])),
+            :precedence(@fields[3]),
+            :message(@fields[4..*].join(' '));
     }
-
 }
 
+ddt %status;
+
 =finish
+
+%command            = ();
+for <ctz1dbadm01 jgz1dbadm01> -> $adm {
+    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+}
+my %physicaldisk    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
+for %physicaldisk.keys.sort -> $adm {
+    for %physicaldisk{$adm}.stdout-results.lines -> $record {
+        my @fields  = $record.trim.split(/\s+/);
+        my $node    = @fields[0] ~~ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %status{$adm}<PHYSICALDISK>.push: PHYSICALDISK_RECORD.new:
+            :name(@fields[1]),
+            :serial(@fields[2]),
+            :status(@fields[3..*]);
+    }
+}
+
+ddt %status;
+
+=finish
+
+jgz1celadm14: 1_1         2025-07-16T22:08:16-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm14 are not configured properly."
+jgz1celadm13: 1_1         2025-07-16T22:08:50-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm13 are not configured properly."
+jgz1celadm12: 1_1         2025-07-16T22:08:28-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm12 are not configured properly."
+jgz1celadm11: 1_1         2025-07-16T22:07:24-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm11 are not configured properly."
+jgz1celadm10: 1_1         2025-07-16T22:07:30-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm10 are not configured properly."
+jgz1celadm09: 1_1         2025-07-16T22:08:23-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm09 are not configured properly."
+jgz1celadm08: 1_1         2025-07-16T22:08:27-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm08 are not configured properly."
+jgz1celadm07: 1_1         2025-07-16T22:08:58-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm07 are not configured properly."
+jgz1celadm06: 1_1         2025-07-16T22:07:36-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm06 are not configured properly."
+jgz1celadm05: 1_1         2025-07-16T22:08:59-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm05 are not configured properly."
+jgz1celadm04: 1_1         2025-07-16T14:04:33-04:00         critical         "A fault occurred.  Fault class    : fault.memory.intel.mrc.memtest-failed-single-symbol  Fault message  : http://support.oracle.com/msg/SPX86A-800A-95"
+jgz1celadm04: 2_1         2025-07-16T20:15:29-04:00         warning          "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support aut
+omatic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm04 are not configured properly."
+jgz1celadm03: 1_1         2025-07-16T22:08:19-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm03 are not configured properly."
+jgz1celadm02: 1_1         2025-07-14T21:27:24-04:00         critical         "InfiniBand port HCA-1:1 has non-zero error counts.  State               : Active  Physical Link State : LinkUp  Data Rate           : 40 Gps  Symbol Error
+s       : 4  Received Errors     : 0"
+jgz1celadm02: 1_2         2025-07-15T12:25:24-04:00         clear            "InfiniBand port HCA-1:1 status is OK.  State               : Active  Physical Link State : LinkUp  Data Rate           : 40 Gps  Symbol Errors       : 0  
+Received Errors     : 0"
+jgz1celadm02: 2_1         2025-07-16T22:08:29-04:00         warning          "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support aut
+omatic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm02 are not configured properly."
+jgz1celadm01: 1_1         2025-07-16T22:08:51-04:00         warning         "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support auto
+matic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm01 are not configured properly."
