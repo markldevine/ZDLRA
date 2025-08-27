@@ -3,6 +3,8 @@
 use Async::Command::Multi;
 use Data::Dump::Tree;
 
+#   ssh ctz1dbadm01 sudo -- ssh ctz1celadm01 "cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'2025-01-01T00:00:01-04:00\\\\\'"
+
 my %command;
 %command<ctz1celadm01>  =   (
                                 'ssh',
@@ -10,12 +12,11 @@ my %command;
                                 'sudo',
                                 'ssh',
                                 'ctz1celadm01',
-                                Q/"cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'/ ~ '2025-01-01T00:00:01-04:00' ~ Q/\\\\\'"/,
+#                               Q/"cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'/ ~ '2025-01-01T00:00:01-04:00' ~ Q/\\\\\'"/,
+                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ '2025-01-01T00:00:01-04:00' ~ Q/\\'"/,
                             );
 
-die %command<ctz1celadm01>;
-
-#   ssh ctz1dbadm01 sudo -- ssh ctz1celadm01 "cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'2025-01-01T00:00:01-04:00\\\\\'"
+put %command<ctz1celadm01>;
 
 my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
 
