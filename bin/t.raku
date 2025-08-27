@@ -2,48 +2,26 @@
 
 use Async::Command::Multi;
 use Data::Dump::Tree;
-use Our::Cache;
 
-class PHYSICALDISK_RECORD {
-    has Str         $.name;
-    has Str         $.serial;
-    has Str         $.status;
-}
-
-class ALERTHISTORY_RECORD {
-    has Str         $.name;
-    has DateTime    $.datetime;
-    has Str         $.precedence;
-    has Str         $.message;
-}
-
-my @ZDLRA-Admins    = <ctz1dbadm01 jgz1dbadm01>;
-my %inventory;
-my %status;
 my %command;
-my $id-prefix       = 'DateTime-Last-alerthistory-Record';
+%command<ctz1celadm01>  =   (
+                                'ssh',
+                                'ctz1dbadm01',
+                                'sudo',
+                                'ssh',
+                                'ctz1celadm01',
+                                Q/"cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'/ ~ '2025-01-01T00:00:01-04:00' ~ Q/\\\\\'"/,
+                            );
 
-%command            = ();
-for @ZDLRA-Admins -> $adm {
-    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
-}
-my %physicaldisk    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
-for %physicaldisk.keys.sort -> $adm {
-    for %physicaldisk{$adm}.stdout-results.lines -> $record {
-        my @fields  = $record.trim.split(/\s+/);
-        my $node    = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-        %inventory{$adm}{$node} = '';
-        %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
-            :name(@fields[1]),
-            :serial(@fields[2]),
-            :status(@fields[3..*].join(' '));
-    }
-}
+die %command<ctz1celadm01>;
 
-ddt %inventory;
-exit;
-ddt %status;
-exit;
+#   ssh ctz1dbadm01 sudo -- ssh ctz1celadm01 "cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'2025-01-01T00:00:01-04:00\\\\\'"
+
+my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
+
+ddt %alerthistory;
+
+=finish
 
 #   A028441@jgz1dbadm01.wmata.com:~> sudo dcli -l root -g /root/cell_group 'cellcli -e "list alerthistory WHERE begintime > \"2019-01-01T15:46:30-04:00\""'
 
