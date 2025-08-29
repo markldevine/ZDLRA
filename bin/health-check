@@ -24,28 +24,81 @@ my %command;
 my $id-prefix       = 'DateTime-Last-alerthistory-Record';
 
 %command            = ();
-for @ZDLRA-Admins -> $adm {
-    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
-}
-my %physicaldisk    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
-for %physicaldisk.keys.sort -> $adm {
-    for %physicaldisk{$adm}.stdout-results.lines -> $record {
-        my @fields  = $record.trim.split(/\s+/);
-        my $node    = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-        %inventory{$adm}{$node} = '';
-        %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
-            :name(@fields[1]),
-            :serial(@fields[2]),
-            :status(@fields[3..*].join(' '));
-    }
+#for @ZDLRA-Admins -> $adm {
+#    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+#}
+#my %physicaldisk    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
+#for %physicaldisk.keys.sort -> $adm {
+#    for %physicaldisk{$adm}.stdout-results.lines -> $record {
+#        my @fields  = $record.trim.split(/\s+/);
+#        my $node    = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
+#        %inventory{$adm}{$node} = '';
+#        %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
+#            :name(@fields[1]),
+#            :serial(@fields[2]),
+#            :status(@fields[3..*].join(' '));
+#    }
+#}
+
+#   ddt %inventory;
+#   exit;
+#   ddt %status;
+#   exit;
+
+my $instance        = now;
+my $dtnow           = DateTime.new(:timezone($*TZ), $instance - (7 * 24 * 60 * 60));
+say $dtnow;
+my $dtc             = DateTime.new(:timezone($*TZ), $instance - (7 * 24 * 60 * 60)).truncated-to("second");
+say $dtc;
+
+=finish
+
+
+
+
+
+my $tz-hours        = $dt.local.offset-in-hours;
+my $tz-minutes      = $dt.local.offset-in-minutes;
+$tz-minutes         = $tz-minutes.abs - ($tz-hours.abs * 60);
+die sprintf("%s%02d:%02d", $tz-hours < 0 ?? '-' !! '+', $tz-hours, $tz-minutes);
+#my $timezone-string = 
+
+=finish
+
+for %inventory.keys -> $adm {
+    for %inventory{$adm}.keys.sort -> $cell {
+
+#   '2025-08-20T00:00:01-04:00'
+
+        %command{$adm}  = (
+                            'ssh',
+                            $adm',
+                            'sudo',
+                            'ssh',
+                            $cell,
+                            Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~
+                            sprintf("%d-%02d-%02dT%02d:%02d:%02d%d",
+                                $dt.year,
+                                $dt.month,
+                                $dt.day,
+                                $dt.hour,
+                                $dt.minute,
+                                $dt.second,
+                                $timezone-string,
+                            ) ~
+                            Q/\\'"/,
+                          );
+
 }
 
-ddt %inventory;
-exit;
-ddt %status;
-exit;
-
-#   A028441@jgz1dbadm01.wmata.com:~> sudo dcli -l root -g /root/cell_group 'cellcli -e "list alerthistory WHERE begintime > \"2019-01-01T15:46:30-04:00\""'
+#%command<ctz1celadm01>  =   (
+                                'ssh',
+                                'ctz1dbadm01',
+                                'sudo',
+                                'ssh',
+                                'ctz1celadm01',
+                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ '2025-08-20T00:00:01-04:00' ~ Q/\\'"/,
+                            );
 
 for @ZDLRA-Admins -> $adm {
     %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list alerthistory"';
