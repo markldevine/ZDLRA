@@ -3,53 +3,67 @@
 use Async::Command::Multi;
 use Data::Dump::Tree;
 use Our::Cache;
+use JSON::Fast;
 
 class PHYSICALDISK_RECORD {
-    has Str         $.name;
-    has Str         $.serial;
-    has Str         $.status;
+    has Str             $.name;
+    has Str             $.serial;
+    has Str             $.status;
 }
 
 class ALERTHISTORY_RECORD {
-    has Str         $.name;
-    has DateTime    $.datetime;
-    has Str         $.precedence;
-    has Str         $.message;
+    has Str             $.name;
+    has DateTime        $.datetime;
+    has Str             $.precedence;
+    has Str             $.message;
 }
 
-my @ZDLRA-Admins    = <ctz1dbadm01 jgz1dbadm01>;
+my @ZDLRA-Admins        = <ctz1dbadm01 jgz1dbadm01>;
 my %inventory;
 my %status;
 my %command;
-my $id-prefix       = 'DateTime-Last-alerthistory-Record';
+my $id-prefix           = 'DateTime-Last-alerthistory-Record';
 
-%command            = ();
-#for @ZDLRA-Admins -> $adm {
-#    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
-#}
-#my %physicaldisk    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
-#for %physicaldisk.keys.sort -> $adm {
-#    for %physicaldisk{$adm}.stdout-results.lines -> $record {
-#        my @fields  = $record.trim.split(/\s+/);
-#        my $node    = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-#        %inventory{$adm}{$node} = '';
-#        %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
-#            :name(@fields[1]),
-#            :serial(@fields[2]),
-#            :status(@fields[3..*].join(' '));
-#    }
-#}
+%command                = ();
+for @ZDLRA-Admins -> $adm {
+    %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+}
+my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
+for %physicaldisk.keys.sort -> $adm {
+    for %physicaldisk{$adm}.stdout-results.lines -> $record {
+        my @fields      = $record.trim.split(/\s+/);
+        my $node        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
+        %inventory{$adm}{$node} = '';
+        %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
+            :name(@fields[1]),
+            :serial(@fields[2]),
+            :status(@fields[3..*].join(' '));
+    }
+}
 
-#   ddt %inventory;
-#   exit;
-#   ddt %status;
-#   exit;
+my $identifier          = 'alerthistory_datetimes';
+my %ah-dt-cache;
+my $ah-dt-cache         = Our::Cache.new(:$identifier);
+if $ah-dt-cache.cache-hit {
+    %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
+    for %ah-dt-cache.keys.sort -> $adm {
+        for %ah-dt-cache{$adm}.keys.sort -> $node {
+            %ah-dt-cache{$adm}{$node} = DateTime.new: %ah-dt-cache{$adm}{$node};
+        }
+    }
+}
+else {
+    my $one-year-ago    = now - (365 * 24 * 60 * 60);
+    my $dt1ya           = DateTime.new(:timezone($*TZ), $one-year-ago).truncated-to('second');
+    for %inventory.keys.sort -> $adm {
+        for %inventory{$adm}.keys.sort -> $node {
+            %ah-dt-cache{$adm}{$node} = $dt1ya.clone;
+        }
+    }
+    $ah-dt-cache.store(:data(to-json(%ah-dt-cache))) or note $?LINE;
+}
 
-my $instance        = now;
-my $dtnow           = DateTime.new(:timezone($*TZ), $instance - (7 * 24 * 60 * 60));
-say $dtnow;
-my $dtc             = DateTime.new(:timezone($*TZ), $instance - (7 * 24 * 60 * 60)).truncated-to("second");
-say $dtc;
+ddt %ah-dt-cache;
 
 =finish
 
