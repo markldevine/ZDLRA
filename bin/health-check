@@ -62,8 +62,9 @@ for @redis-clis -> @redis-cli {
 }
 
 sub MAIN (
-    Int :$log-days-minumum,                     #= Number of days of logs (bypass "only unseen logs" mechanism)
+    Int   :$log-days        = 0,               #= log days to display (bypass "only unseen logs" mechanism)
 ) {
+    die                     unless @ZDLRA-adms.elems;
     %command                = ();
     for @ZDLRA-adms -> $adm {
         %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
@@ -86,7 +87,8 @@ sub MAIN (
     my $identifier          = 'alerthistory_datetimes';
     my %ah-dt-cache;
     my $ah-dt-cache         = Our::Cache.new(:$identifier);
-    if $ah-dt-cache.cache-hit {
+
+    if ! $log-days && $ah-dt-cache.cache-hit {
         %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
         for %ah-dt-cache.keys.sort -> $adm {
             for %ah-dt-cache{$adm}.keys.sort -> $node {
@@ -95,14 +97,15 @@ sub MAIN (
         }
     }
     else {
-        my $one-year-ago    = now - (365 * 24 * 60 * 60);
-        my $dt1ya           = DateTime.new(:timezone($*TZ), $one-year-ago).truncated-to('second');
+        my $first-log       = now - (365 * 24 * 60 * 60);
+        $first-log          = now - ($log-days * 24 * 60 * 60) if $log-days;
+        my $first-dt        = DateTime.new(:timezone($*TZ), $first-log).truncated-to('second');
         for %inventory.keys.sort -> $adm {
             for %inventory{$adm}.keys.sort -> $node {
-                %ah-dt-cache{$adm}{$node} = $dt1ya.clone;
+                %ah-dt-cache{$adm}{$node} = $first-dt.clone;
             }
         }
-        $ah-dt-cache.store(:data(to-json(%ah-dt-cache))) or note $?LINE;
+        $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
     }
 
     %command                = ();
@@ -127,7 +130,7 @@ sub MAIN (
                 my @fields      = $record.trim.split(/\s+/);
                 my $datetime    = DateTime.new(@fields[1]);
                 %ah-dt-cache{$adm}{$cell} = $datetime if $datetime > %ah-dt-cache{$adm}{$cell};
-                %status{$adm}<ALERTHISTORY>.push: ALERTHISTORY_RECORD.new:
+                %status{$adm}<ALERTHISTORY>{$cell}.push: ALERTHISTORY_RECORD.new:
                     :name(@fields[0]),
                     :$datetime,
                     :precedence(@fields[2]),
@@ -135,10 +138,22 @@ sub MAIN (
             }
         }
     }
-
-    ddt %status;
-
     $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
+
+    for %inventory.keys -> $adm {
+        put $adm;
+        for %inventory{$adm}.keys.sort -> $cell {
+            put "\t" ~ $cell;
+            for %status{$adm}<PHYSICALDISK>{$cell}.list -> $pd {
+                printf "\t\t%s\t%s [%s]\n", $pd.status, $pd.name, $pd.serial if $pd.status ne 'normal';
+            }
+            if (%status{$adm}<ALERTHISTORY>:exists) && (%status{$adm}<ALERTHISTORY>{$cell}:exists) {
+                for %status{$adm}<ALERTHISTORY>{$cell}.list -> $logrcd {
+                    printf "\t\t%s %s %s\n", $logrcd.datetime, $logrcd.precedence, $logrcd.message;
+                }
+            }
+        }
+    }
 }
 
 =finish
