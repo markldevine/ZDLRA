@@ -18,130 +18,127 @@ class ALERTHISTORY_RECORD {
     has Str             $.message;
 }
 
-my @ZDLRA-Admins        = <ctz1dbadm01 jgz1dbadm01>;
+my @ZDLRA-adms;
 my %inventory;
 my %status;
 my %command;
 my $id-prefix           = 'DateTime-Last-alerthistory-Record';
 
-%command                = ();
-for @ZDLRA-Admins -> $adm {
-    %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+my @redis-servers = slurp("$*HOME/.redis-servers").chomp.split("\n");
+
+my @redis-clis;
+for @redis-servers -> $redis-server {
+    my @cmd-string = sprintf("ssh -L 127.0.0.1:6379:%s:6379 %s /usr/bin/redis-cli", $redis-server, $redis-server).split: /\s+/;
+    @redis-clis.push: @cmd-string;
 }
-my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %physicaldisk; exit;
-for %physicaldisk.keys.sort -> $adm {
-    for %physicaldisk{$adm}.stdout-results.lines -> $record {
-        my @fields      = $record.trim.split(/\s+/);
-        my $node        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-        %inventory{$adm}{$node} = '';
-        %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
-            :name(@fields[1]),
-            :serial(@fields[2]),
-            :status(@fields[3..*].join(' '));
+
+for @redis-clis -> @redis-cli {
+    my @rcmd        = flat @redis-cli,
+                      '--raw',
+                      'KEYS',
+                      'eb:zdlra:adm:*';
+    my $proc        = run   @rcmd, :out, :err;
+    my $out         = $proc.out.slurp(:close);
+    my $err         = $proc.err.slurp(:close);
+    fail 'FAILED: ' ~ @rcmd ~ ":\t" ~ $err if $err;
+    if $out {
+        my @z-keys  = $out.chomp.split("\n");
+        die "No ZDLRA adm keys!" unless @z-keys;
+        @rcmd       = flat @redis-cli,
+                      '--raw',
+                      'SUNION',
+                      @z-keys;
+        $proc       = run   @rcmd, :out, :err;
+        $out        = $proc.out.slurp(:close);
+        $err        = $proc.err.slurp(:close);
+        if $err {
+            warn 'ERROR: ' ~ @rcmd.join(' ') ~ ":\t" ~ $err;
+            next;
+        }
+        next        unless $out;
+        @ZDLRA-adms = $out.chomp.split("\n").sort;
+        last;
     }
 }
 
-my $identifier          = 'alerthistory_datetimes';
-my %ah-dt-cache;
-my $ah-dt-cache         = Our::Cache.new(:$identifier);
-if $ah-dt-cache.cache-hit {
-    %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
-    for %ah-dt-cache.keys.sort -> $adm {
-        for %ah-dt-cache{$adm}.keys.sort -> $node {
-            %ah-dt-cache{$adm}{$node} = DateTime.new: %ah-dt-cache{$adm}{$node};
+sub MAIN (
+    Int :$log-days-minumum,                     #= Number of days of logs (bypass "only unseen logs" mechanism)
+) {
+    %command                = ();
+    for @ZDLRA-adms -> $adm {
+        %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+    }
+
+    my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;
+
+    for %physicaldisk.keys.sort -> $adm {
+        for %physicaldisk{$adm}.stdout-results.lines -> $record {
+            my @fields      = $record.trim.split(/\s+/);
+            my $node        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
+            %inventory{$adm}{$node} = '';
+            %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
+                :name(@fields[1]),
+                :serial(@fields[2]),
+                :status(@fields[3..*].join(' '));
         }
     }
-}
-else {
-    my $one-year-ago    = now - (365 * 24 * 60 * 60);
-    my $dt1ya           = DateTime.new(:timezone($*TZ), $one-year-ago).truncated-to('second');
-    for %inventory.keys.sort -> $adm {
-        for %inventory{$adm}.keys.sort -> $node {
-            %ah-dt-cache{$adm}{$node} = $dt1ya.clone;
+
+    my $identifier          = 'alerthistory_datetimes';
+    my %ah-dt-cache;
+    my $ah-dt-cache         = Our::Cache.new(:$identifier);
+    if $ah-dt-cache.cache-hit {
+        %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
+        for %ah-dt-cache.keys.sort -> $adm {
+            for %ah-dt-cache{$adm}.keys.sort -> $node {
+                %ah-dt-cache{$adm}{$node} = DateTime.new: %ah-dt-cache{$adm}{$node};
+            }
         }
     }
-    $ah-dt-cache.store(:data(to-json(%ah-dt-cache))) or note $?LINE;
-}
+    else {
+        my $one-year-ago    = now - (365 * 24 * 60 * 60);
+        my $dt1ya           = DateTime.new(:timezone($*TZ), $one-year-ago).truncated-to('second');
+        for %inventory.keys.sort -> $adm {
+            for %inventory{$adm}.keys.sort -> $node {
+                %ah-dt-cache{$adm}{$node} = $dt1ya.clone;
+            }
+        }
+        $ah-dt-cache.store(:data(to-json(%ah-dt-cache))) or note $?LINE;
+    }
 
-ddt %ah-dt-cache;
-
-=finish
-
-
-
-
-
-my $tz-hours        = $dt.local.offset-in-hours;
-my $tz-minutes      = $dt.local.offset-in-minutes;
-$tz-minutes         = $tz-minutes.abs - ($tz-hours.abs * 60);
-die sprintf("%s%02d:%02d", $tz-hours < 0 ?? '-' !! '+', $tz-hours, $tz-minutes);
-#my $timezone-string = 
-
-=finish
-
-for %inventory.keys -> $adm {
-    for %inventory{$adm}.keys.sort -> $cell {
-
-#   '2025-08-20T00:00:01-04:00'
-
-        %command{$adm}  = (
-                            'ssh',
-                            $adm',
-                            'sudo',
-                            'ssh',
-                            $cell,
-                            Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~
-                            sprintf("%d-%02d-%02dT%02d:%02d:%02d%d",
-                                $dt.year,
-                                $dt.month,
-                                $dt.day,
-                                $dt.hour,
-                                $dt.minute,
-                                $dt.second,
-                                $timezone-string,
-                            ) ~
-                            Q/\\'"/,
-                          );
-
-}
-
-#%command<ctz1celadm01>  =   (
+    %command                = ();
+    for %inventory.keys -> $adm {
+        for %inventory{$adm}.keys.sort -> $cell {
+            %command{$cell} = (
                                 'ssh',
-                                'ctz1dbadm01',
+                                $adm,
                                 'sudo',
                                 'ssh',
-                                'ctz1celadm01',
-                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ '2025-08-20T00:00:01-04:00' ~ Q/\\'"/,
+                                $cell,
+                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ %ah-dt-cache{$adm}{$cell}.Str ~ Q/\\'"/,
                             );
-
-for @ZDLRA-Admins -> $adm {
-    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list alerthistory"';
-}
-my %lastdt;
-my %alerthistory    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %alerthistory; exit;
-
-for %alerthistory.keys.sort -> $adm {
-    for %alerthistory{$adm}.stdout-results.lines -> $record {
-        my @fields  = $record.trim.split(/\s+/);
-        my $datetime    = DateTime.new(@fields[2]);
-        my $node        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-
-die '|' ~ $node ~ '|';
-
-        %lastdt{$adm}   = $datetime if %lastdt{$adm}:exists && $datetime > %lastdt{$adm};
-        %status{$adm}<ALERTHISTORY>.push: ALERTHISTORY_RECORD.new:
-            :name(@fields[1]),
-            :$datetime,
-            :precedence(@fields[3]),
-            :message(@fields[4..*].join(' '));
+        }
     }
-}
 
-for @ZDLRA-Admins -> $adm {
-    my $cache       = Our::Cache.new(:identifier($id-prefix ~ '_' ~ $adm));
-    $cache.store(:data(%lastdt{$adm}.Str)) or note;
-}
+    my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
 
-ddt %status;
+    for %inventory.keys -> $adm {
+        for %inventory{$adm}.keys.sort -> $cell {
+            for %alerthistory{$cell}.stdout-results.lines -> $record {
+                my @fields      = $record.trim.split(/\s+/);
+                my $datetime    = DateTime.new(@fields[1]);
+                %ah-dt-cache{$adm}{$cell} = $datetime if $datetime > %ah-dt-cache{$adm}{$cell};
+                %status{$adm}<ALERTHISTORY>.push: ALERTHISTORY_RECORD.new:
+                    :name(@fields[0]),
+                    :$datetime,
+                    :precedence(@fields[2]),
+                    :message(@fields[3..*].join(' '));
+            }
+        }
+    }
+
+    ddt %status;
+
+    $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
+}
 
 =finish

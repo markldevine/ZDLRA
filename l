@@ -1,0 +1,5 @@
+1_1         2025-07-16T14:04:33-04:00         critical         "A fault occurred.  Fault class    : fault.memory.intel.mrc.memtest-failed-single-symbol  Fault message  : http://support.oracle.com/msg/SPX86A-800A-95"
+1_2         2025-08-13T11:31:35-04:00         clear            "A fault has been cleared.  "
+2_1         2025-07-16T20:15:29-04:00         warning          "Diagnostic packages for Service Requests will not be automatically uploaded because ASR Manager on 170.121.15.51 is not accessible or does not support automatic diagnostic package upload or does not have HTTP receiver enabled or SNMP subscribers on jgz1celadm04 are not configured properly."
+3_1         2025-08-09T03:07:02-04:00         info             "Advanced Intrusion Detection Environment (AIDE) detected potential changes to software on this system. The changes are listed in /var/log/aide/aide.log and also at the end of this alert message. Summary : : Total number of entries : 50782 Added entries : 4 Removed entries : 0 Changed entries : 0 "
+3_2         2025-08-14T03:07:31-04:00         clear            "Advanced Intrusion Detection Environment (AIDE) violation has been cleared."
