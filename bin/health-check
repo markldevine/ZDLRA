@@ -22,6 +22,7 @@ class ALERTHISTORY_RECORD {
 
 my @ZDLRA-dbms;
 my %inventory;
+my %ah-dt-cache;
 my %status;
 my %command;
 my $id-prefix           = 'DateTime-Last-alerthistory-Record';
@@ -92,24 +93,21 @@ my grammar ALERTHISTORY-GRAMMAR {
 }
 
 class ALERTHISTORY-ACTIONS {
+    has Str $.dbm           is required;
+    has Str $.cell          is required;
+
     method log-record-herald ($/) {
-
-
-
-
-        %inventory{$dbm}<CELLS>{$cell}
-
-
-
-
-        @alerthistory-records.push:   ALERTHISTORY-RECORD.new(
+        my $datetime        = DateTime.new(~$/<datetime>);
+        %inventory{$dbm}<CELLS>{$cell}<ALERTHISTORY>.push: ALERTHISTORY-RECORD.new(
             :name(~$/<name>),
-            :datetime(DateTime.new(~$/<datetime>)),
+            :$datetime,
             :severity(~$/<severity>),
         );
+        %ah-dt-cache{$dbm}{$cell} = $datetime if $datetime > %ah-dt-cache{$dbm}{$cell};
     }
+
     method log-text ($/) {
-        @alerthistory-records[* - 1].message.push: ~$/.chomp;
+        %inventory{$dbm}<CELLS>{$cell}<ALERTHISTORY>[* - 1].message.push: ~$/.chomp;
     }
 }
 
@@ -137,7 +135,6 @@ sub MAIN (
     }
 
     my $identifier          = 'alerthistory_datetimes';
-    my %ah-dt-cache;
     my $ah-dt-cache         = Our::Cache.new(:$identifier);
 
     if ! $log-days && $ah-dt-cache.cache-hit {
@@ -178,19 +175,7 @@ sub MAIN (
 
     for %inventory.keys -> $dbm {
         for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             ALERTHISTORY-GRAMMAR.parse(%alerthistory{$cell}.stdout-results, :actions(ALERTHISTORY-ACTIONS.new(:$dbm, :$cell)));
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            for %alerthistory{$cell}.stdout-results.lines -> $record {
-                my @fields      = $record.trim.split(/\s+/);
-                my $datetime    = DateTime.new(@fields[1]);
-                %ah-dt-cache{$dbm}{$cell} = $datetime if $datetime > %ah-dt-cache{$dbm}{$cell};
-                %status{$dbm}<ALERTHISTORY>{$cell}.push: ALERTHISTORY_RECORD.new:
-                    :name(@fields[0]),
-                    :$datetime,
-                    :severity(@fields[2]),
-                    :message(@fields[3..*].join(' '));
-            }
         }
     }
     $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
