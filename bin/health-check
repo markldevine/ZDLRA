@@ -1,5 +1,7 @@
 #!/usr/bin/env raku
 
+#   dbmcli -n -m -e list alerthistory
+
 use Async::Command::Multi;
 use Data::Dump::Tree;
 use Our::Cache;
@@ -14,11 +16,11 @@ class PHYSICALDISK_RECORD {
 class ALERTHISTORY_RECORD {
     has Str             $.name;
     has DateTime        $.datetime;
-    has Str             $.precedence;
+    has Str             $.severity;
     has Str             $.message;
 }
 
-my @ZDLRA-adms;
+my @ZDLRA-dbms;
 my %inventory;
 my %status;
 my %command;
@@ -28,56 +30,106 @@ my @redis-servers = slurp("$*HOME/.redis-servers").chomp.split("\n");
 
 my @redis-clis;
 for @redis-servers -> $redis-server {
-    my @cmd-string = sprintf("ssh -L 127.0.0.1:6379:%s:6379 %s /usr/bin/redis-cli", $redis-server, $redis-server).split: /\s+/;
+    my @cmd-string  = sprintf("ssh -L 127.0.0.1:6379:%s:6379 %s /usr/bin/redis-cli", $redis-server, $redis-server).split: /\s+/;
     @redis-clis.push: @cmd-string;
 }
 
-for @redis-clis -> @redis-cli {
-    my @rcmd        = flat @redis-cli,
+my @z-keys;
+my @rcmd;
+my @redis-cli;
+for @redis-clis -> @r-cli {
+    @rcmd           = flat @r-cli,
                       '--raw',
                       'KEYS',
-                      'eb:zdlra:adm:*';
+                      'eb:zdlra:dbm:*';
     my $proc        = run   @rcmd, :out, :err;
     my $out         = $proc.out.slurp(:close);
     my $err         = $proc.err.slurp(:close);
-    fail 'FAILED: ' ~ @rcmd ~ ":\t" ~ $err if $err;
-    if $out {
-        my @z-keys  = $out.chomp.split("\n");
-        die "No ZDLRA adm keys!" unless @z-keys;
-        @rcmd       = flat @redis-cli,
-                      '--raw',
-                      'SUNION',
-                      @z-keys;
-        $proc       = run   @rcmd, :out, :err;
-        $out        = $proc.out.slurp(:close);
-        $err        = $proc.err.slurp(:close);
-        if $err {
-            warn 'ERROR: ' ~ @rcmd.join(' ') ~ ":\t" ~ $err;
-            next;
+    if $err {
+        warn 'FAILED: ' ~ @rcmd ~ "\t[" ~ $err ~ ']';
+        next;
+    }
+    if $out.chars {
+        if @z-keys = $out.chomp.split("\n") {
+            @redis-cli = @r-cli;
+            last;
         }
-        next        unless $out;
-        @ZDLRA-adms = $out.chomp.split("\n").sort;
-        last;
+    }
+}
+die "No ZDLRA dbm keys!" unless @z-keys;
+
+for @z-keys -> $z-key {
+    my @rcmd        = flat @redis-cli,
+                        '--raw',
+                        'LINDEX',
+                        $z-key,
+                        '0';
+    my $proc        = run   @rcmd, :out, :err;
+    my $out         = $proc.out.slurp(:close);
+    my $err         = $proc.err.slurp(:close);
+    die $err    if $err;
+    die 'REDIS returned no VALUE for KEY ' ~ $z-key unless $out;
+    @ZDLRA-dbms.push: $out.chomp;
+}
+
+class ALERTHISTORY-RECORD {
+    has Str         $.name      is required;
+    has DateTime    $.datetime  is required;
+    has Str         $.severity  is required;
+    has Str         @.message;
+}
+
+my grammar ALERTHISTORY-GRAMMAR {
+    token TOP                   { <log-record>+                                                             }
+    token log-record            { <log-record-start> || <log-record-continue>                               }
+    token log-record-start      { ^^ <log-record-herald> \s+ <log-text>                                     }
+    token log-record-herald     { \s* <name> \s+ <datetime> \s+ <severity>                                  }
+    token log-record-continue   { ^^ <!before <log-record-herald>> <log-text>                               }
+    token name                  { \d+ '_' \d+                                                               }
+    token datetime              { \d\d\d\d '-' \d\d '-' \d\d 'T' \d\d ':' \d\d ':' \d\d '-' \d\d ':' \d\d   }
+    token severity              { \w+                                                                       }
+    token log-text              { .+? \n                                                                    }
+}
+
+class ALERTHISTORY-ACTIONS {
+    method log-record-herald ($/) {
+
+
+
+
+        %inventory{$dbm}<CELLS>{$cell}
+
+
+
+
+        @alerthistory-records.push:   ALERTHISTORY-RECORD.new(
+            :name(~$/<name>),
+            :datetime(DateTime.new(~$/<datetime>)),
+            :severity(~$/<severity>),
+        );
+    }
+    method log-text ($/) {
+        @alerthistory-records[* - 1].message.push: ~$/.chomp;
     }
 }
 
 sub MAIN (
     Int   :$log-days        = 0,               #= log days to display (bypass "only unseen logs" mechanism)
 ) {
-    die                     unless @ZDLRA-adms.elems;
+    die                     unless @ZDLRA-dbms.elems;
     %command                = ();
-    for @ZDLRA-adms -> $adm {
-        %command{$adm}      = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
+    for @ZDLRA-dbms -> $dbm {
+        %command{$dbm}      = 'ssh', $dbm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
     }
 
     my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;
 
-    for %physicaldisk.keys.sort -> $adm {
-        for %physicaldisk{$adm}.stdout-results.lines -> $record {
+    for %physicaldisk.keys.sort -> $dbm {
+        for %physicaldisk{$dbm}.stdout-results.lines -> $record {
             my @fields      = $record.trim.split(/\s+/);
-            my $node        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-            %inventory{$adm}{$node} = '';
-            %status{$adm}<PHYSICALDISK>{$node}.push: PHYSICALDISK_RECORD.new:
+            my $cell        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
+            %inventory{$dbm}<CELSS>{$cell} = '';
+            %status{$dbm}<PHYSICALDISK>{$cell}.push: PHYSICALDISK_RECORD.new:
                 :name(@fields[1]),
                 :serial(@fields[2]),
                 :status(@fields[3..*].join(' '));
@@ -90,9 +142,9 @@ sub MAIN (
 
     if ! $log-days && $ah-dt-cache.cache-hit {
         %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
-        for %ah-dt-cache.keys.sort -> $adm {
-            for %ah-dt-cache{$adm}.keys.sort -> $node {
-                %ah-dt-cache{$adm}{$node} = DateTime.new: %ah-dt-cache{$adm}{$node};
+        for %ah-dt-cache.keys.sort -> $dbm {
+            for %ah-dt-cache{$dbm}.keys.sort -> $cell {
+                %ah-dt-cache{$dbm}{$cell} = DateTime.new: %ah-dt-cache{$dbm}{$cell};
             }
         }
     }
@@ -100,56 +152,59 @@ sub MAIN (
         my $first-log       = now - (365 * 24 * 60 * 60);
         $first-log          = now - ($log-days * 24 * 60 * 60) if $log-days;
         my $first-dt        = DateTime.new(:timezone($*TZ), $first-log).truncated-to('second');
-        for %inventory.keys.sort -> $adm {
-            for %inventory{$adm}.keys.sort -> $node {
-                %ah-dt-cache{$adm}{$node} = $first-dt.clone;
+        for %inventory.keys.sort -> $dbm {
+            for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
+                %ah-dt-cache{$dbm}{$cell} = $first-dt.clone;
             }
         }
         $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
     }
 
     %command                = ();
-    for %inventory.keys -> $adm {
-        for %inventory{$adm}.keys.sort -> $cell {
+    for %inventory.keys -> $dbm {
+        for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
             %command{$cell} = (
                                 'ssh',
-                                $adm,
+                                $dbm,
                                 'sudo',
                                 'ssh',
                                 $cell,
-                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ %ah-dt-cache{$adm}{$cell}.Str ~ Q/\\'"/,
+                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ %ah-dt-cache{$dbm}{$cell}.Str ~ Q/\\'"/,
                             );
         }
     }
 
     my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
 
-    for %inventory.keys -> $adm {
-        for %inventory{$adm}.keys.sort -> $cell {
+    for %inventory.keys -> $dbm {
+        for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            ALERTHISTORY-GRAMMAR.parse(%alerthistory{$cell}.stdout-results, :actions(ALERTHISTORY-ACTIONS.new(:$dbm, :$cell)));
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             for %alerthistory{$cell}.stdout-results.lines -> $record {
                 my @fields      = $record.trim.split(/\s+/);
                 my $datetime    = DateTime.new(@fields[1]);
-                %ah-dt-cache{$adm}{$cell} = $datetime if $datetime > %ah-dt-cache{$adm}{$cell};
-                %status{$adm}<ALERTHISTORY>{$cell}.push: ALERTHISTORY_RECORD.new:
+                %ah-dt-cache{$dbm}{$cell} = $datetime if $datetime > %ah-dt-cache{$dbm}{$cell};
+                %status{$dbm}<ALERTHISTORY>{$cell}.push: ALERTHISTORY_RECORD.new:
                     :name(@fields[0]),
                     :$datetime,
-                    :precedence(@fields[2]),
+                    :severity(@fields[2]),
                     :message(@fields[3..*].join(' '));
             }
         }
     }
     $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
 
-    for %inventory.keys -> $adm {
-        put $adm;
-        for %inventory{$adm}.keys.sort -> $cell {
+    for %inventory.keys -> $dbm {
+        put $dbm;
+        for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
             put "\t" ~ $cell;
-            for %status{$adm}<PHYSICALDISK>{$cell}.list -> $pd {
+            for %status{$dbm}<PHYSICALDISK>{$cell}.list -> $pd {
                 printf "\t\t%s\t%s [%s]\n", $pd.status, $pd.name, $pd.serial if $pd.status ne 'normal';
             }
-            if (%status{$adm}<ALERTHISTORY>:exists) && (%status{$adm}<ALERTHISTORY>{$cell}:exists) {
-                for %status{$adm}<ALERTHISTORY>{$cell}.list -> $logrcd {
-                    printf "\t\t%s %s %s\n", $logrcd.datetime, $logrcd.precedence, $logrcd.message;
+            if (%status{$dbm}<ALERTHISTORY>:exists) && (%status{$dbm}<ALERTHISTORY>{$cell}:exists) {
+                for %status{$dbm}<ALERTHISTORY>{$cell}.list -> $logrcd {
+                    printf "\t\t%s %s %s\n", $logrcd.datetime, $logrcd.severity, $logrcd.message;
                 }
             }
         }
