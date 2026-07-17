@@ -98,16 +98,16 @@ class ALERTHISTORY-ACTIONS {
 
     method log-record-herald ($/) {
         my $datetime        = DateTime.new(~$/<datetime>);
-        %inventory{$dbm}<CELLS>{$cell}<ALERTHISTORY>.push: ALERTHISTORY-RECORD.new(
+        %inventory{$!dbm}<CELLS>{$!cell}<ALERTHISTORY>.push: ALERTHISTORY-RECORD.new(
             :name(~$/<name>),
             :$datetime,
             :severity(~$/<severity>),
         );
-        %ah-dt-cache{$dbm}{$cell} = $datetime if $datetime > %ah-dt-cache{$dbm}{$cell};
+        %ah-dt-cache{$!dbm}{$!cell} = $datetime if $datetime > %ah-dt-cache{$!dbm}{$!cell};
     }
 
     method log-text ($/) {
-        %inventory{$dbm}<CELLS>{$cell}<ALERTHISTORY>[* - 1].message.push: ~$/.chomp;
+        %inventory{$!dbm}<CELLS>{$!cell}<ALERTHISTORY>[* - 1].message.push: ~$/.chomp;
     }
 }
 
@@ -197,3 +197,34 @@ sub MAIN (
 }
 
 =finish
+
+%%% use a grammar because of the crazy Unicode padding they output in these commands...
+
+mdevine@W-608863:~/github.com/ZDLRA/bin> ssh ctz1dbadm02 sudo dbmcli -e list physicaldisk detail | cat
+         name:                   252:0
+         deviceId:               19
+         diskType:               HardDisk
+         enclosureDeviceId:      252
+         errOtherCount:          0
+         makeModel:              "HGST    H101860SFSUN600G"
+         physicalFirmware:       A990
+         physicalInsertTime:     2026-04-09T04:00:58-04:00
+         physicalInterface:      sas
+         physicalSerial:         FAGANF
+         physicalSize:           558.91207122802734375G
+         slotNumber:             0
+         status:                 failed
+
+         name:                   252:1
+         deviceId:               20
+         diskType:               HardDisk
+         enclosureDeviceId:      252
+         errOtherCount:          0
+         makeModel:              "SEAGATE ST0600IN9SUN600G"
+         physicalFirmware:       ORSB
+         physicalInsertTime:     2026-04-09T04:00:58-04:00
+         physicalInterface:      sas
+         physicalSerial:         JEFMXD
+         physicalSize:           558.91207122802734375G
+         slotNumber:             1
+         status:                 normal
