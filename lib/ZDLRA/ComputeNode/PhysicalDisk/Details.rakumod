@@ -1,12 +1,9 @@
 unit        class ZDLRA::ComputeNode::PhysicalDisk::Details:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
-use         ZDLRA::ComputeNode::PhysicalDisk::Details::Actions;
-use         ZDLRA::ComputeNode::PhysicalDisk::Details::Grammar;
+use         ZDLRA::Common::PhysicalDisk::Details::Actions;
+use         ZDLRA::Common::PhysicalDisk::Details::Grammar;
+use         ZDLRA::Common::PhysicalDisk::Details::Record;
 use         Async::Command::Multi;
-
-use         Data::Dump::Tree;
-use         Grammar::Debugger;
-#use        Grammar::Tracer;
 
 has @.compute-nodes             is required;
 has %.Details;
@@ -19,8 +16,9 @@ submethod TWEAK {
     }
     %results                        = Async::Command::Multi.new(:%command).sow.reap;
     for %results.keys.sort -> $compute-node {
-        my $actions                 = ZDLRA::ComputeNode::PhysicalDisk::Details::Actions.new;
-        %!Details{$compute-node}    = ZDLRA::ComputeNode::PhysicalDisk::Details::Grammar.parse(%results{$compute-node}.stdout-results, :$actions).made;
+        my $actions                 = ZDLRA::Common::PhysicalDisk::Details::Actions.new;
+        %!Details{$compute-node}    = ZDLRA::Common::PhysicalDisk::Details::Grammar.parse(%results{$compute-node}.stdout-results, :$actions).made;
+        note $compute-node ~ ' parse returned ' ~ %!Details{$compute-node}.elems ~ ' elements, not 4!' unless %!Details{$compute-node}.elems == 4;
     }
 }
 

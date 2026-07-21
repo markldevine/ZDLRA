@@ -2,10 +2,17 @@
 
 use lib $*HOME ~ '/github.com/ZDLRA/lib';
 use ZDLRA::ComputeNode::PhysicalDisk::Details;
-
-use         Grammar::Debugger;
-#use        Grammar::Tracer;
+use Data::Dump::Tree;
 
 my @compute-nodes   = <ctz1dbadm01 ctz1dbadm02 jgz1dbadm01 jgz1dbadm02>;
 
 my $d               = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:@compute-nodes);
+
+for $d.Details.keys.sort -> $cn {
+    put $cn;
+    for $d.Details{$cn} -> $rcds {
+        for $rcds.list -> $rcd {
+            put "\t" ~ $rcd.name ~ "\t" ~ $rcd.status;
+        }
+    }
+}

@@ -1,4 +1,4 @@
-unit    class ZDLRA::ComputeNode::PhysicalDisk::Details::Record:api<1>:auth<Mark Devine (mark@markdevine.com)>;
+unit    class ZDLRA::Common::PhysicalDisk::Details::Record:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
 has     $.name                  is required;
 has     $.deviceId              is required;

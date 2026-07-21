@@ -1,6 +1,6 @@
-unit    class ZDLRA::ComputeNode::PhysicalDisk::Details::Actions:api<1>:auth<Mark Devine (mark@markdevine.com)>;
+unit    class ZDLRA::Common::PhysicalDisk::Details::Actions:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
-use     ZDLRA::ComputeNode::PhysicalDisk::Details::Record;
+use     ZDLRA::Common::PhysicalDisk::Details::Record;
 
 method TOP ($/) {
     make $<detail-record>».made;
@@ -15,7 +15,7 @@ method detail-record($/) {
                     minute  => $<physicalInsertTime-line><minute>.Str,
                     second  => $<physicalInsertTime-line><second>.Str,
                 ;
-    make ZDLRA::ComputeNode::PhysicalDisk::Details::Record.new(
+    make ZDLRA::Common::PhysicalDisk::Details::Record.new(
         name                 => $<name-line><name>.Str,
         deviceId             => $<deviceId-line><deviceId>.Str,
         diskType             => $<diskType-line><diskType>.Str,

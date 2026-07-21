@@ -1,4 +1,4 @@
-unit    grammar ZDLRA::ComputeNode::PhysicalDisk::Details::Grammar:api<1>:auth<Mark Devine (mark@markdevine.com)>;
+unit    grammar ZDLRA::Common::PhysicalDisk::Details::Grammar:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
 token TOP                       {   <detail-record>+                                        }
 token detail-record             {
