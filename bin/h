@@ -1,77 +1,35 @@
 #!/usr/bin/env raku
 
-#   dbmcli -n -m -e list alerthistory
-
 use Async::Command::Multi;
 use Data::Dump::Tree;
 use Our::Cache;
 use JSON::Fast;
 
-class PHYSICALDISK_RECORD {
-    has Str             $.name;
-    has Str             $.serial;
-    has Str             $.status;
-}
+use lib '/home/mdevine/github.com/raku-Our-KV/lib';
+use Our::KV;
 
-class ALERTHISTORY_RECORD {
-    has Str             $.name;
-    has DateTime        $.datetime;
-    has Str             $.severity;
-    has Str             $.message;
-}
-
-my @ZDLRA-dbms;
+my @cellcli-hosts;
 my %inventory;
 my %ah-dt-cache;
 my %status;
 my %command;
-my $id-prefix           = 'DateTime-Last-alerthistory-Record';
+my $id-prefix               = 'DateTime-Last-alerthistory-Record';
 
-my @redis-servers = slurp("$*HOME/.redis-servers").chomp.split("\n");
+my $kv-server               = Our::KV.new(:kv-server(<jgstmgtgate1lpv.wmata.local>), :kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+my @parent-keys             = $kv-server.KEYS(:key('eb:zdlra:dbm:*'));
+die "No ZDLRA dbm keys!" unless @parent-keys;
 
-my @redis-clis;
-for @redis-servers -> $redis-server {
-    my @cmd-string  = sprintf("ssh -L 127.0.0.1:6379:%s:6379 %s /usr/bin/redis-cli", $redis-server, $redis-server).split: /\s+/;
-    @redis-clis.push: @cmd-string;
+my @compute-nodes;
+for @parent-keys -> $key {
+    my @vs                  = $kv-server.LRANGE(:$key, :0begin, :100end).sort;
+    @cellcli-hosts.push:    @vs[0];
+    @compute-nodes.append:  @vs;
 }
+@compute-nodes             .= sort;
+ddt @compute-nodes;
+ddt @cellcli-hosts;
 
-my @z-keys;
-my @rcmd;
-my @redis-cli;
-for @redis-clis -> @r-cli {
-    @rcmd           = flat @r-cli,
-                      '--raw',
-                      'KEYS',
-                      'eb:zdlra:dbm:*';
-    my $proc        = run   @rcmd, :out, :err;
-    my $out         = $proc.out.slurp(:close);
-    my $err         = $proc.err.slurp(:close);
-    if $err {
-        warn 'FAILED: ' ~ @rcmd ~ "\t[" ~ $err ~ ']';
-        next;
-    }
-    if $out.chars {
-        if @z-keys = $out.chomp.split("\n") {
-            @redis-cli = @r-cli;
-            last;
-        }
-    }
-}
-die "No ZDLRA dbm keys!" unless @z-keys;
-
-for @z-keys -> $z-key {
-    my @rcmd        = flat @redis-cli,
-                        '--raw',
-                        'LINDEX',
-                        $z-key,
-                        '0';
-    my $proc        = run   @rcmd, :out, :err;
-    my $out         = $proc.out.slurp(:close);
-    my $err         = $proc.err.slurp(:close);
-    die $err    if $err;
-    die 'REDIS returned no VALUE for KEY ' ~ $z-key unless $out;
-    @ZDLRA-dbms.push: $out.chomp;
-}
+=finish
 
 class ALERTHISTORY-RECORD {
     has Str         $.name      is required;
@@ -114,7 +72,7 @@ class ALERTHISTORY-ACTIONS {
 sub MAIN (
     Int   :$log-days        = 0,               #= log days to display (bypass "only unseen logs" mechanism)
 ) {
-    die                     unless @ZDLRA-dbms.elems;
+    die                     unless @cellcli-hosts.elems;
     %command                = ();
 
 ################################################################################
@@ -126,7 +84,7 @@ sub MAIN (
 ### StorageCell PhysicalDisk Detail Check                                    ###
 ################################################################################
 
-    for @ZDLRA-dbms -> $dbm {
+    for @cellcli-hosts -> $dbm {
         %command{$dbm}      = 'ssh', $dbm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
     }
 
