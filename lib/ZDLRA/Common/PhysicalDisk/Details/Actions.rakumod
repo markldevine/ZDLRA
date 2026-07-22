@@ -7,7 +7,7 @@ method TOP ($/) {
 }
 
 method detail-record($/) {
-    my DateTime $dt;
+    my $dt      = DateTime.new(:0year, :1month, :1day, :0hour, :0minute, :0second);
     $dt         = DateTime.new:
                     year    => $<physicalInsertTime-line><year>.Str,
                     month   => $<physicalInsertTime-line><month>.Str,
@@ -15,11 +15,12 @@ method detail-record($/) {
                     hour    => $<physicalInsertTime-line><hour>.Str,
                     minute  => $<physicalInsertTime-line><minute>.Str,
                     second  => $<physicalInsertTime-line><second>.Str,
-                with $<physicalInsertTime-line><year>;
+                if $<physicalInsertTime-line>:e;
     my $deviceName          = '';
-    $deviceName             = $<diskType-line><diskType>.Str with $<diskType-line>;
+    $deviceName             = $<diskType-line><diskType>.Str if $<diskType-line>:e;
     my $luns                = '';
-    $luns                   = $<luns-line><luns>.Str with $<luns-line>;
+    $luns                   = $<luns-line><luns>.Str if $<luns-line>:e;
+
     make ZDLRA::Common::PhysicalDisk::Details::Record.new(
         name                => $<name-line><name>.Str,
         deviceId            => $<deviceId-line><deviceId>.Str,
