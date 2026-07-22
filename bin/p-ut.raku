@@ -1,5 +1,9 @@
 #!/usr/bin/env raku
 
+use         ZDLRA::Common::AlertHistory::List::Actions;
+use         ZDLRA::Common::AlertHistory::List::Grammar;
+use         ZDLRA::Common::AlertHistory::List::Record;
+
 my $data = q:to/END/;
     3_1    2025-08-30T03:06:44-04:00    info        Advanced Intrusion Detection Environment (AIDE) detected potential changes to software on this system. The changes are listed in /var/log/aide/aide.log and also at the end of this alert message.
                                                     Summary : :
@@ -15,25 +19,6 @@ my $data = q:to/END/;
                                                     /usr        : 1.76G
     1_2    2025-08-14T17:36:40-04:00    clear       File system / is 58% full, which is below the 75% threshold. Normal space reclamation will resume.
 END
-
-my grammar ALERTHISTORY-GRAMMAR {
-    token TOP                   { <log-record>+                                                             }
-    token log-record            { <log-record-start> || <log-record-continue>                               }
-    token log-record-start      { ^^ <log-record-herald> \s+ <log-text>                                     }
-    token log-record-herald     { \s* <name> \s+ <datetime> \s+ <severity>                                  }
-    token log-record-continue   { ^^ <!before <log-record-herald>> <log-text>                               }
-    token name                  { \d+ '_' \d+                                                               }
-    token datetime              { \d\d\d\d '-' \d\d '-' \d\d 'T' \d\d ':' \d\d ':' \d\d '-' \d\d ':' \d\d   }
-    token severity              { \w+                                                                       }
-    token log-text              { .+? \n                                                                    }
-}
-
-class ALERTHISTORY-RECORD {
-    has Str         $.name      is required;
-    has DateTime    $.datetime  is required;
-    has Str         $.severity  is required;
-    has Str         @.message;
-}
 
 my @alerthistory-records;
 

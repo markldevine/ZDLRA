@@ -8,7 +8,7 @@ use JSON::Fast;
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
 
-my @cellcli-hosts;
+my @cellcli-gateways;
 my %inventory;
 my %ah-dt-cache;
 my %status;
@@ -22,12 +22,12 @@ die "No ZDLRA dbm keys!" unless @parent-keys;
 my @compute-nodes;
 for @parent-keys -> $key {
     my @vs                  = $kv-server.LRANGE(:$key, :0begin, :100end).sort;
-    @cellcli-hosts.push:    @vs[0];
+    @cellcli-gateways.push: @vs[0];
     @compute-nodes.append:  @vs;
 }
 @compute-nodes             .= sort;
 ddt @compute-nodes;
-ddt @cellcli-hosts;
+ddt @cellcli-gateways;
 
 =finish
 
