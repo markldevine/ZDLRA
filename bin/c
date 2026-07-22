@@ -2,9 +2,21 @@
 
 use lib $*HOME ~ '/github.com/ZDLRA/lib';
 use ZDLRA::ComputeNode::PhysicalDisk::Details;
+use lib '/home/mdevine/github.com/raku-Our-KV/lib';
+use Our::KV;
+
 use Data::Dump::Tree;
 
-my @compute-nodes   = <ctz1dbadm01 ctz1dbadm02 jgz1dbadm01 jgz1dbadm02>;
+my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+my @parent-keys             = $kv-server.KEYS(:key('eb:zdlra:dbm:*'));
+die "No ZDLRA dbm keys!" unless @parent-keys;
+
+my @compute-nodes;
+for @parent-keys -> $key {
+    my @vs                  = $kv-server.LRANGE(:$key, :0begin, :100end).sort;
+    @compute-nodes.append:  @vs;
+}
+@compute-nodes             .= sort;
 
 my $d               = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:@compute-nodes);
 
