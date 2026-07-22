@@ -20,7 +20,8 @@ submethod TWEAK {
     for %results.keys.sort -> $compute-node {
         my $actions                 = ZDLRA::Common::PhysicalDisk::Details::Actions.new;
         %!Details{$compute-node}    = ZDLRA::Common::PhysicalDisk::Details::Grammar.parse(%results{$compute-node}.stdout-results, :$actions).made;
-        note $compute-node ~ ' parse returned ' ~ %!Details{$compute-node}.elems ~ ' elements, not ' ~ NUMBER-OF-DISKS-IN-COMPUTE-NODE ~ '!' unless %!Details{$compute-node}.elems == NUMBER-OF-DISKS-IN-COMPUTE-NODE;
+        note $compute-node ~ ' parse returned ' ~ %!Details{$compute-node}.elems ~ ' elements, not ' ~ NUMBER-OF-DISKS-IN-COMPUTE-NODE ~ '!'
+            unless %!Details{$compute-node}.elems == NUMBER-OF-DISKS-IN-COMPUTE-NODE;
     }
 }
 

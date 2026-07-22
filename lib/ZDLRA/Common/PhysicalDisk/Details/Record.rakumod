@@ -2,9 +2,11 @@ unit    class ZDLRA::Common::PhysicalDisk::Details::Record:api<1>:auth<Mark Devi
 
 has     $.name                  is required;
 has     $.deviceId              is required;
+has     $.deviceName;
 has     $.diskType              is required;
 has     $.enclosureDeviceId     is required;
 has     $.errOtherCount         is required;
+has     $.luns;
 has     $.makeModel             is required;
 has     $.physicalFirmware      is required;
 has     $.physicalInsertTime    is required;

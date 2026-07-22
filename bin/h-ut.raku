@@ -4,9 +4,14 @@ use Async::Command::Multi;
 use Data::Dump::Tree;
 use Our::Cache;
 use JSON::Fast;
+use Data::Dump::Tree;
 
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
+
+use lib $*HOME ~ '/github.com/ZDLRA/lib';
+use ZDLRA::ComputeNode::PhysicalDisk::Details;
+use ZDLRA::StorageCell::PhysicalDisk::Details;
 
 my @cellcli-gateways;
 my %inventory;
@@ -15,7 +20,7 @@ my %status;
 my %command;
 my $id-prefix               = 'DateTime-Last-alerthistory-Record';
 
-my $kv-server               = Our::KV.new(:kv-server(<jgstmgtgate1lpv.wmata.local>), :kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
 my @parent-keys             = $kv-server.KEYS(:key('eb:zdlra:dbm:*'));
 die "No ZDLRA dbm keys!" unless @parent-keys;
 
@@ -26,59 +31,26 @@ for @parent-keys -> $key {
     @compute-nodes.append:  @vs;
 }
 @compute-nodes             .= sort;
-ddt @compute-nodes;
-ddt @cellcli-gateways;
+my %ZDLRA;
 
-=finish
-
-class ALERTHISTORY-RECORD {
-    has Str         $.name      is required;
-    has DateTime    $.datetime  is required;
-    has Str         $.severity  is required;
-    has Str         @.message;
-}
-
-my grammar ALERTHISTORY-GRAMMAR {
-    token TOP                   { <log-record>+                                                             }
-    token log-record            { <log-record-start> || <log-record-continue>                               }
-    token log-record-start      { ^^ <log-record-herald> \s+ <log-text>                                     }
-    token log-record-herald     { \s* <name> \s+ <datetime> \s+ <severity>                                  }
-    token log-record-continue   { ^^ <!before <log-record-herald>> <log-text>                               }
-    token name                  { \d+ '_' \d+                                                               }
-    token datetime              { \d\d\d\d '-' \d\d '-' \d\d 'T' \d\d ':' \d\d ':' \d\d '-' \d\d ':' \d\d   }
-    token severity              { \w+                                                                       }
-    token log-text              { .+? \n                                                                    }
-}
-
-class ALERTHISTORY-ACTIONS {
-    has Str $.dbm           is required;
-    has Str $.cell          is required;
-
-    method log-record-herald ($/) {
-        my $datetime        = DateTime.new(~$/<datetime>);
-        %inventory{$!dbm}<CELLS>{$!cell}<ALERTHISTORY>.push: ALERTHISTORY-RECORD.new(
-            :name(~$/<name>),
-            :$datetime,
-            :severity(~$/<severity>),
-        );
-        %ah-dt-cache{$!dbm}{$!cell} = $datetime if $datetime > %ah-dt-cache{$!dbm}{$!cell};
-    }
-
-    method log-text ($/) {
-        %inventory{$!dbm}<CELLS>{$!cell}<ALERTHISTORY>[* - 1].message.push: ~$/.chomp;
-    }
+for @cellcli-gateways.sort -> $cellcli-gateway {
+    %ZDLRA{$cellcli-gateway}.push: $kv-server.SMEMBERS(:key("eb:zdlra:{$cellcli-gateway}:storagecells"));
 }
 
 sub MAIN (
     Int   :$log-days        = 0,               #= log days to display (bypass "only unseen logs" mechanism)
 ) {
-    die                     unless @cellcli-hosts.elems;
     %command                = ();
 
 ################################################################################
 ### ComputeNode PhysicalDisk Detail Check                                    ###
 ################################################################################
 
+    $                       = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
+
+}
+
+=finish
 
 ################################################################################
 ### StorageCell PhysicalDisk Detail Check                                    ###

@@ -1,58 +1,30 @@
 #!/usr/bin/env raku
 
-use Async::Command::Multi;
+use lib $*HOME ~ '/github.com/ZDLRA/lib';
+use ZDLRA::ComputeNode::PhysicalDisk::Details;
+use lib '/home/mdevine/github.com/raku-Our-KV/lib';
+use Our::KV;
+
 use Data::Dump::Tree;
 
-#   $ ssh ctz1dbadm01 sudo -- ssh ctz1celadm01 "cellcli -e list alerthistory WHERE begintime \\\\\> \\\\\'2025-01-01T00:00:01-04:00\\\\\'"
+my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+my @parent-keys             = $kv-server.KEYS(:key('eb:zdlra:dbm:*'));
+die "No ZDLRA dbm keys!" unless @parent-keys;
 
-my %command;
-%command<ctz1celadm01>  =   (
-                                'ssh',
-                                'ctz1dbadm01',
-                                'sudo',
-                                'ssh',
-                                'ctz1celadm01',
-                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ '2025-08-20T00:00:01-04:00' ~ Q/\\'"/,
-                            );
-
-put %command<ctz1celadm01>;
-
-my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
-
-ddt %alerthistory;
-
-=finish
-
-#   A028441@jgz1dbadm01.wmata.com:~> sudo dcli -l root -g /root/cell_group 'cellcli -e "list alerthistory WHERE begintime > \"2019-01-01T15:46:30-04:00\""'
-
-for @ZDLRA-Admins -> $adm {
-    %command{$adm}  = 'ssh', $adm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list alerthistory"';
+my @compute-nodes;
+for @parent-keys -> $key {
+    my @vs                  = $kv-server.LRANGE(:$key, :0begin, :100end).sort;
+    @compute-nodes.append:  @vs;
 }
-my %lastdt;
-my %alerthistory    = Async::Command::Multi.new(:%command).sow.reap;                                                            # ddt %alerthistory; exit;
+@compute-nodes             .= sort;
 
-for %alerthistory.keys.sort -> $adm {
-    for %alerthistory{$adm}.stdout-results.lines -> $record {
-        my @fields  = $record.trim.split(/\s+/);
-        my $datetime    = DateTime.new(@fields[2]);
-        my $node        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
+my $d               = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:@compute-nodes);
 
-die '|' ~ $node ~ '|';
-
-        %lastdt{$adm}   = $datetime if %lastdt{$adm}:exists && $datetime > %lastdt{$adm};
-        %status{$adm}<ALERTHISTORY>.push: ALERTHISTORY_RECORD.new:
-            :name(@fields[1]),
-            :$datetime,
-            :precedence(@fields[3]),
-            :message(@fields[4..*].join(' '));
+for $d.Details.keys.sort -> $cn {
+    put $cn;
+    for $d.Details{$cn} -> $rcds {
+        for $rcds.list -> $rcd {
+            put "\t" ~ $rcd.name ~ "\t" ~ $rcd.status;
+        }
     }
 }
-
-for @ZDLRA-Admins -> $adm {
-    my $cache       = Our::Cache.new(:identifier($id-prefix ~ '_' ~ $adm));
-    $cache.store(:data(%lastdt{$adm}.Str)) or note;
-}
-
-ddt %status;
-
-=finish
