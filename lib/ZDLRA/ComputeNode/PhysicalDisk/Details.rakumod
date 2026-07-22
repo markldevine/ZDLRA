@@ -5,6 +5,8 @@ use         ZDLRA::Common::PhysicalDisk::Details::Grammar;
 use         ZDLRA::Common::PhysicalDisk::Details::Record;
 use         Async::Command::Multi;
 
+constant    NUMBER-OF-DISKS-IN-COMPUTE-NODE = 4;
+
 has @.compute-nodes             is required;
 has %.Details;
 
@@ -18,7 +20,7 @@ submethod TWEAK {
     for %results.keys.sort -> $compute-node {
         my $actions                 = ZDLRA::Common::PhysicalDisk::Details::Actions.new;
         %!Details{$compute-node}    = ZDLRA::Common::PhysicalDisk::Details::Grammar.parse(%results{$compute-node}.stdout-results, :$actions).made;
-        note $compute-node ~ ' parse returned ' ~ %!Details{$compute-node}.elems ~ ' elements, not 4!' unless %!Details{$compute-node}.elems == 4;
+        note $compute-node ~ ' parse returned ' ~ %!Details{$compute-node}.elems ~ ' elements, not ' ~ NUMBER-OF-DISKS-IN-COMPUTE-NODE ~ '!' unless %!Details{$compute-node}.elems == NUMBER-OF-DISKS-IN-COMPUTE-NODE;
     }
 }
 
