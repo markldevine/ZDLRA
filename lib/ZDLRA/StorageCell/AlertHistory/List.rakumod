@@ -1,4 +1,4 @@
-unit        class ZDLRA::ComputeNode::AlertHistory::List:api<1>:auth<Mark Devine (mark@markdevine.com)>;
+unit        class ZDLRA::StorageCell::AlertHistory::List:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
 use         ZDLRA::Common::AlertHistory::List::Actions;
 use         ZDLRA::Common::AlertHistory::List::Grammar;
