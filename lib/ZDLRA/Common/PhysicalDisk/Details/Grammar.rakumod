@@ -9,7 +9,7 @@ token detail-record             {
                                     <errOtherCount-line>        # 0
                                     <makeModel-line>            # "HGST    H101860SFSUN600G"
                                     <physicalFirmware-line>     # A990
-                                    <physicalInsertTime-line>   # 2026-04-09T04:00:58-04:00
+                                    <physicalInsertTime-line>*  # 2026-04-09T04:00:58-04:00
                                     <physicalInterface-line>    # sas
                                     <physicalSerial-line>       # FAGANF
                                     <physicalSize-line>         # 558.91207122802734375G

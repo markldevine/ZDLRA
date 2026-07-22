@@ -1,5 +1,8 @@
 #!/usr/bin/env raku
 
+use lib $*HOME ~ '/github.com/ZDLRA/lib';
+use Data::Dump::Tree;
+
 use         ZDLRA::Common::AlertHistory::List::Actions;
 use         ZDLRA::Common::AlertHistory::List::Grammar;
 use         ZDLRA::Common::AlertHistory::List::Record;
@@ -20,27 +23,9 @@ my $data = q:to/END/;
     1_2    2025-08-14T17:36:40-04:00    clear       File system / is 58% full, which is below the 75% threshold. Normal space reclamation will resume.
 END
 
-my @alerthistory-records;
-
-class ALERTHISTORY-ACTIONS {
-    method log-record-herald ($/) {
-        @alerthistory-records.push:   ALERTHISTORY-RECORD.new(
-            :name(~$/<name>),
-            :datetime(DateTime.new(~$/<datetime>)),
-            :severity(~$/<severity>),
-        );
-    }
-
-    method log-text ($/) {
-        @alerthistory-records[* - 1].message.push: ~$/.chomp;
-    }
-}
-
-ALERTHISTORY-GRAMMAR.parse($data, :actions(ALERTHISTORY-ACTIONS));
-
-for @alerthistory-records -> $record {
-    printf "%-6s%-28s%-10s\n", $record.name, $record.datetime, $record.severity;
-    printf "\t%s\n", $record.message.join("\n");
+my $alerthistory    = ZDLRA::Common::AlertHistory::List::Grammar.parse($data, :actions(ZDLRA::Common::AlertHistory::List::Actions.new));
+for $alerthistory<log-record> -> $rcd {
+    say $rcd.made.raku;
 }
 
 =finish

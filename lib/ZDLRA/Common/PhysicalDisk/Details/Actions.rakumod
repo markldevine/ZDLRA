@@ -7,14 +7,15 @@ method TOP ($/) {
 }
 
 method detail-record($/) {
-    my $dt      = DateTime.new:
+    my DateTime $dt;
+    $dt         = DateTime.new:
                     year    => $<physicalInsertTime-line><year>.Str,
                     month   => $<physicalInsertTime-line><month>.Str,
                     day     => $<physicalInsertTime-line><day>.Str,
                     hour    => $<physicalInsertTime-line><hour>.Str,
                     minute  => $<physicalInsertTime-line><minute>.Str,
                     second  => $<physicalInsertTime-line><second>.Str,
-                ;
+                with $<physicalInsertTime-line><year>;
     make ZDLRA::Common::PhysicalDisk::Details::Record.new(
         name                 => $<name-line><name>.Str,
         deviceId             => $<deviceId-line><deviceId>.Str,
