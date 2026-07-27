@@ -24,7 +24,7 @@ method detail-record($/) {
     make ZDLRA::Common::PhysicalDisk::Details::Record.new(
         name                => $<name-line><name>.Str,
         deviceId            => $<deviceId-line><deviceId>.Str,
-        deviceName          => $deviceName;
+        deviceName          => $deviceName,
         diskType            => $<diskType-line><diskType>.Str,
         enclosureDeviceId   => $<enclosureDeviceId-line><enclosureDeviceId>.Str,
         errOtherCount       => $<errOtherCount-line><errOtherCount>.Str.Int,

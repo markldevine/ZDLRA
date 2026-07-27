@@ -19,25 +19,25 @@ token detail-record             {
                                     <status-line>               # failed
                                     \n*
                                 }
-token name-line                 { ^^ \s+ 'name:' \s+ <name>           { put $/.Str; }    \n }
+token name-line                 { ^^ \s+ 'name:' \s+ <name>                              \n }
 token name                      { \d+ ':' \d+                                               }
-token deviceId-line             { ^^ \s+ 'deviceId:' \s+ <deviceId>   { put $/.Str; }    \n }
+token deviceId-line             { ^^ \s+ 'deviceId:' \s+ <deviceId>                      \n }
 token deviceId                  { \d+                                                       }
-token deviceName-line           { ^^ \s+ 'deviceName:' \s+ <deviceName>   { put $/.Str; } \n }
+token deviceName-line           { ^^ \s+ 'deviceName:' \s+ <deviceName>                  \n }
 token deviceName                { '/dev/' \w+                                               }
-token diskType-line             { ^^ \s+ 'diskType:' \s+ <diskType>   { put $/.Str; }    \n }
+token diskType-line             { ^^ \s+ 'diskType:' \s+ <diskType>                      \n }
 token diskType                  { \w+                                                       }
-token enclosureDeviceId-line    { ^^ \s+ 'enclosureDeviceId:' \s+ <enclosureDeviceId> { put $/.Str; }   \n }
+token enclosureDeviceId-line    { ^^ \s+ 'enclosureDeviceId:' \s+ <enclosureDeviceId>    \n }
 token enclosureDeviceId         { \d+                                                       }
-token errOtherCount-line        { ^^ \s+ 'errOtherCount:' \s+ <errOtherCount>         { put $/.Str; }   \n }
+token errOtherCount-line        { ^^ \s+ 'errOtherCount:' \s+ <errOtherCount>            \n }
 token errOtherCount             { \d+                                                       }
 
-token luns-line                 { ^^ \s+ 'luns:' \s+ <luns>            { put $/.Str; }   \n }
+token luns-line                 { ^^ \s+ 'luns:' \s+ <luns>                              \n }
 token luns                      { \d+ '_' \d+                                               }
 
-token makeModel-line            { ^^ \s+ 'makeModel:' \s+ '"' <makeModel> '"'         { put $/.Str; }   \n }
+token makeModel-line            { ^^ \s+ 'makeModel:' \s+ '"' <makeModel> '"'            \n }
 token makeModel                 { <[\w\s]>+                                                 }
-token physicalFirmware-line     { ^^ \s+ 'physicalFirmware:' \s+ <physicalFirmware>   { put $/.Str; }   \n }
+token physicalFirmware-line     { ^^ \s+ 'physicalFirmware:' \s+ <physicalFirmware>      \n }
 token physicalFirmware          { \w+                                                       }
 token physicalInsertTime-line   {
                                     ^^ \s+ 'physicalInsertTime:' \s+
@@ -54,7 +54,7 @@ token physicalInsertTime-line   {
                                     <second>
                                     '-'
                                     <offset>
-                                    \n                                                { put $/.Str; }
+                                    \n
                                 }
 token year                      { \d\d\d\d                                                  }
 token month                     { \d\d                                                      }
@@ -63,15 +63,15 @@ token hour                      { \d\d                                          
 token minute                    { \d\d                                                      }
 token second                    { \d\d                                                      }
 token offset                    { \d\d ':' \d\d                                             }
-token physicalInterface-line    { ^^ \s+ 'physicalInterface:' \s+ <physicalInterface> { put $/.Str; }   \n }
+token physicalInterface-line    { ^^ \s+ 'physicalInterface:' \s+ <physicalInterface>    \n }
 token physicalInterface         { \w+                                                       }
-token physicalSerial-line       { ^^ \s+ 'physicalSerial:' \s+ <physicalSerial>       { put $/.Str; }   \n }
+token physicalSerial-line       { ^^ \s+ 'physicalSerial:' \s+ <physicalSerial>          \n }
 token physicalSerial            { \w+                                                       }
-token physicalSize-line         { ^^ \s+ 'physicalSize:' \s+ <physicalSize>           { put $/.Str; }   \n }
+token physicalSize-line         { ^^ \s+ 'physicalSize:' \s+ <physicalSize>              \n }
 token physicalSize              { <[\w.]>+                                                  }
-token slotNumber-line           { ^^ \s+ 'slotNumber:' \s+ <slotNumber>               { put $/.Str; }   \n }
+token slotNumber-line           { ^^ \s+ 'slotNumber:' \s+ <slotNumber>                  \n }
 token slotNumber                { \d+                                                       }
-token status-line               { ^^ \s+ 'status:' \s+ <status>                       { put $/.Str; }   \n }
+token status-line               { ^^ \s+ 'status:' \s+ <status>                          \n }
 token status                    { \w+                                                       }
 
 =finish

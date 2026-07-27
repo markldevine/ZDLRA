@@ -3,7 +3,16 @@ unit        class ZDLRA::ComputeNode::PhysicalDisk::Details:api<1>:auth<Mark Dev
 use         ZDLRA::Common::PhysicalDisk::Details::Actions;
 use         ZDLRA::Common::PhysicalDisk::Details::Grammar;
 use         ZDLRA::Common::PhysicalDisk::Details::Record;
-use         Async::Command::Multi;
+
+use Async::Command;
+use Async::Command::Multi;
+use Async::Command::Result;
+
+
+use         JSON::Fast;
+use         JSON::Marshal;
+use         JSON::Unmarshal;
+use         Data::Dump::Tree;
 
 constant    NUMBER-OF-DISKS-IN-COMPUTE-NODE = 4;
 

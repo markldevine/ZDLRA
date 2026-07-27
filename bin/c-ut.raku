@@ -1,9 +1,13 @@
 #!/usr/bin/env raku
 
+use lib '/home/mdevine/github.com/raku-Async-Command/lib';
 use lib $*HOME ~ '/github.com/ZDLRA/lib';
 use ZDLRA::ComputeNode::PhysicalDisk::Details;
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
+
+use Async::Command;
+use Async::Command::Result;
 
 use Data::Dump::Tree;
 
