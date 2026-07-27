@@ -6,7 +6,7 @@ use     ZDLRA::Common::PhysicalDisk::Details::Record;
 use     Async::Command::Multi;
 
 has     @.cellcli-gateways  is required;
-has     %.Details;
+has     %.Details           is built;
 
 submethod TWEAK {
     my %command;

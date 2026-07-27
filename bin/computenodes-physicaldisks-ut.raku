@@ -22,7 +22,7 @@ for $d.Details.keys.sort -> $cn {
     put $cn;
     for $d.Details{$cn} -> $rcds {
         for $rcds.list -> $rcd {
-            put "\t" ~ $rcd.name ~ "\t" ~ $rcd.status;
+            printf  "%12s%30s\n", $rcd.name, $rcd.status;
         }
     }
 }

@@ -5,8 +5,6 @@ use ZDLRA::StorageCell::PhysicalDisk::Details;
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
 
-use Data::Dump::Tree;
-
 my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
 my @parent-keys             = $kv-server.KEYS(:key('eb:zdlra:dbm:*'));
 die "No ZDLRA dbm keys!"    unless @parent-keys;
@@ -22,17 +20,15 @@ for @parent-keys -> $key {
 #    %ZDLRA{$cellcli-gateway} = $kv-server.SMEMBERS(:key("eb:zdlra:{$cellcli-gateway}:storagecells"));
 #}
 
-my $d               = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
+my $storage-cells   = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
 
-put 'dumping...';
-ddt $d;
-=finish
-
-for $d.Details.keys.sort -> $sn {
-    put $sn;
-    for $d.Details{$cn} -> $rcds {
+for $storage-cells.Details.keys.sort -> $sc {
+    put $sc;
+    for $$storage-cells.Details{$sc} -> $rcds {
         for $rcds.list -> $rcd {
-            put "\t" ~ $rcd.name ~ "\t" ~ $rcd.status;
+            printf  "%12s%30s\n", $rcd.name, $rcd.status;
         }
     }
 }
+
+=finish
