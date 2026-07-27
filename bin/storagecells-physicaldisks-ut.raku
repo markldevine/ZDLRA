@@ -15,11 +15,6 @@ for @parent-keys -> $key {
 }
 @cellcli-gateways          .= sort;
 
-#my %ZDLRA;
-#for @cellcli-gateways -> $cellcli-gateway {
-#    %ZDLRA{$cellcli-gateway} = $kv-server.SMEMBERS(:key("eb:zdlra:{$cellcli-gateway}:storagecells"));
-#}
-
 my $storage-cells   = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
 
 for $storage-cells.Details.keys.sort -> $sc {
