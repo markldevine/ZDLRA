@@ -3,16 +3,16 @@ unit    grammar ZDLRA::Common::PhysicalDisk::Details::Grammar:api<1>:auth<Mark D
 token TOP                       {   <detail-record>+                                        }
 token detail-record             {
                                     <name-line>                 # 252:0
-                                    <deviceId-line>             # 19
-                                    <deviceName-line>*          # /dev/sda
+                                    <deviceId-line>?            # 19
+                                    <deviceName-line>?          # /dev/sda
                                     <diskType-line>             # HardDisk
-                                    <enclosureDeviceId-line>    # 252
-                                    <errOtherCount-line>        # 0
-                                    <luns-line>*                # 0_3
+                                    <enclosureDeviceId-line>?   # 252
+                                    <errOtherCount-line>?       # 0
+                                    <luns-line>?                # 0_3
                                     <makeModel-line>            # "HGST    H101860SFSUN600G"
                                     <physicalFirmware-line>     # A990
-                                    <physicalInsertTime-line>*  # 2026-04-09T04:00:58-04:00
-                                    <physicalInterface-line>    # sas
+                                    <physicalInsertTime-line>   # 2026-04-09T04:00:58-04:00
+                                    <physicalInterface-line>?   # sas
                                     <physicalSerial-line>       # FAGANF
                                     <physicalSize-line>         # 558.91207122802734375G
                                     <slotNumber-line>           # 0
@@ -20,7 +20,7 @@ token detail-record             {
                                     \n*
                                 }
 token name-line                 { ^^ \s+ 'name:' \s+ <name>                              \n }
-token name                      { \d+ ':' \d+                                               }
+token name                      { <[\w:]>+                                                  }
 token deviceId-line             { ^^ \s+ 'deviceId:' \s+ <deviceId>                      \n }
 token deviceId                  { \d+                                                       }
 token deviceName-line           { ^^ \s+ 'deviceName:' \s+ <deviceName>                  \n }
@@ -31,10 +31,8 @@ token enclosureDeviceId-line    { ^^ \s+ 'enclosureDeviceId:' \s+ <enclosureDevi
 token enclosureDeviceId         { \d+                                                       }
 token errOtherCount-line        { ^^ \s+ 'errOtherCount:' \s+ <errOtherCount>            \n }
 token errOtherCount             { \d+                                                       }
-
 token luns-line                 { ^^ \s+ 'luns:' \s+ <luns>                              \n }
 token luns                      { \d+ '_' \d+                                               }
-
 token makeModel-line            { ^^ \s+ 'makeModel:' \s+ '"' <makeModel> '"'            \n }
 token makeModel                 { <[\w\s]>+                                                 }
 token physicalFirmware-line     { ^^ \s+ 'physicalFirmware:' \s+ <physicalFirmware>      \n }
@@ -66,11 +64,11 @@ token offset                    { \d\d ':' \d\d                                 
 token physicalInterface-line    { ^^ \s+ 'physicalInterface:' \s+ <physicalInterface>    \n }
 token physicalInterface         { \w+                                                       }
 token physicalSerial-line       { ^^ \s+ 'physicalSerial:' \s+ <physicalSerial>          \n }
-token physicalSerial            { \w+                                                       }
+token physicalSerial            { <[\w-]>+                                                  }
 token physicalSize-line         { ^^ \s+ 'physicalSize:' \s+ <physicalSize>              \n }
 token physicalSize              { <[\w.]>+                                                  }
-token slotNumber-line           { ^^ \s+ 'slotNumber:' \s+ <slotNumber>                  \n }
-token slotNumber                { \d+                                                       }
+token slotNumber-line           { ^^ \s+ 'slotNumber:' \s+ '"'? <slotNumber> '"'?        \n }
+token slotNumber                { <[\d.:;\w\h]>+                                            }
 token status-line               { ^^ \s+ 'status:' \s+ <status>                          \n }
 token status                    { \w+                                                       }
 

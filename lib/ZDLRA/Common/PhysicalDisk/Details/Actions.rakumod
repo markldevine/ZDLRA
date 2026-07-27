@@ -16,23 +16,18 @@ method detail-record($/) {
                     minute  => $<physicalInsertTime-line><minute>.Str,
                     second  => $<physicalInsertTime-line><second>.Str,
                 if $<physicalInsertTime-line>:e;
-    my $deviceName          = '';
-    $deviceName             = $<diskType-line><diskType>.Str if $<diskType-line>:e;
-    my $luns                = '';
-    $luns                   = $<luns-line><luns>.Str if $<luns-line>:e;
-
     make ZDLRA::Common::PhysicalDisk::Details::Record.new(
         name                => $<name-line><name>.Str,
-        deviceId            => $<deviceId-line><deviceId>.Str,
-        deviceName          => $deviceName,
-        diskType            => $<diskType-line><diskType>.Str,
-        enclosureDeviceId   => $<enclosureDeviceId-line><enclosureDeviceId>.Str,
-        errOtherCount       => $<errOtherCount-line><errOtherCount>.Str.Int,
-        luns                => $luns,
-        makeModel           => $<makeModel-line><makeModel>.Str,
-        physicalFirmware    => $<physicalFirmware-line><physicalFirmware>.Str,
+        deviceId            => $<deviceId-line><deviceId>                       ?? $<deviceId-line><deviceId>.Str                       !! '',
+        deviceName          => $<diskType-line><diskType>                       ?? $<diskType-line><diskType>.Str                       !! '',
+        diskType            => $<diskType-line><diskType>                       ?? $<diskType-line><diskType>.Str                       !! '',
+        enclosureDeviceId   => $<enclosureDeviceId-line><enclosureDeviceId>     ??  $<enclosureDeviceId-line><enclosureDeviceId>.Str    !! '',
+        errOtherCount       => $<errOtherCount-line><errOtherCount>             ?? $<errOtherCount-line><errOtherCount>.Str.Int         !! '',
+        luns                => $<luns-line><luns>                               ?? $<luns-line><luns>.Str                               !! '',
+        makeModel           => $<makeModel-line><makeModel>                     ?? $<makeModel-line><makeModel>.Str                     !! '',
+        physicalFirmware    => $<physicalFirmware-line><physicalFirmware>       ?? $<physicalFirmware-line><physicalFirmware>.Str       !! '',
         physicalInsertTime  => $dt,
-        physicalInterface   => $<physicalInterface-line><physicalInterface>.Str,
+        physicalInterface   => $<physicalInterface-line><physicalInterface>     ?? $<physicalInterface-line><physicalInterface>.Str     !! '',
         physicalSerial      => $<physicalSerial-line><physicalSerial>.Str,
         physicalSize        => $<physicalSize-line><physicalSize>.Str,
         slotNumber          => $<slotNumber-line><slotNumber>.Str.Int,

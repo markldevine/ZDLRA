@@ -1,14 +1,12 @@
-unit        class ZDLRA::StorageCell::PhysicalDisk::Details:api<1>:auth<Mark Devine (mark@markdevine.com)>;
+unit    class ZDLRA::StorageCell::PhysicalDisk::Details:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
-use         ZDLRA::Common::PhysicalDisk::Details::Actions;
-use         ZDLRA::Common::PhysicalDisk::Details::Grammar;
-use         ZDLRA::Common::PhysicalDisk::Details::Record;
-use         Async::Command::Multi;
+use     ZDLRA::Common::PhysicalDisk::Details::Actions;
+use     ZDLRA::Common::PhysicalDisk::Details::Grammar;
+use     ZDLRA::Common::PhysicalDisk::Details::Record;
+use     Async::Command::Multi;
 
-use Data::Dump::Tree;
-
-has @.cellcli-gateways              is required;
-has %.Details;
+has     @.cellcli-gateways  is required;
+has     %.Details;
 
 submethod TWEAK {
     my %command;
@@ -31,12 +29,10 @@ submethod TWEAK {
         }
         for %storagecell-details.keys.sort -> $storage-cell {
             my $actions             = ZDLRA::Common::PhysicalDisk::Details::Actions.new;
-put %storagecell-details{$storage-cell};
             die $storage-cell ~ ' parse failed!'
                 unless %!Details{$storage-cell} = ZDLRA::Common::PhysicalDisk::Details::Grammar.parse(%storagecell-details{$storage-cell}, :$actions).made;
         }
     }
-ddt %!Details;
 }
 
 =finish
