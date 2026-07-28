@@ -8,9 +8,34 @@ use ZDLRA::StorageCell::PhysicalDisk::Details;
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
 
-my $kv-server               = Our::KV.new(:kv-server<jgstmgtgate1lpv.wmata.local>, :kv-cli('/usr/bin/redis-cli'), :local-port-forward);
-my @parent-keys             = $kv-server.KEYS(:key('eb:zdlra:dbm:*'));
-die "No ZDLRA dbm keys!" unless @parent-keys;
+use Data::Dump::Tree;
+
+my %ZDLRAS;
+
+my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+
+
+#   redis-cli KEYS "eb:zdlra:\*"
+#       eb:zdlra:CTF:computenodes
+#       eb:zdlra:CTF:storagecells
+#       eb:zdlra:EQX:computenodes
+#       eb:zdlra:EQX:storagecells
+
+
+my @compute-node-keys       = $kv-server.KEYS(:key('eb:zdlra:*:computenodes'));
+die "No ZDLRA compute node keys!" unless @compute-node-keys;
+for @compute-node-keys -> $compute-node-key {
+    my $site                = ($compute-node-key.split(':'))[2];
+    %ZDLRAS{$site}<COMPUTENODES> = $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $site ~ ':computenodes')).list;
+}
+
+ddt %ZDLRAS;
+
+=finish
+
+my @storage-cell-keys       = $kv-server.KEYS(:key('eb:zdlra:*:storagecells'));
+die "No ZDLRA storage cell keys!" unless @storage-cell-keys;
+
 
 my @compute-nodes;
 for @parent-keys -> $key {

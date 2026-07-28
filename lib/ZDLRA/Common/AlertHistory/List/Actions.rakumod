@@ -11,5 +11,4 @@ method log-record ($/)          {
     make ZDLRA::Common::AlertHistory::List::Record.new(|%herald, message => @message);
 }
 
-
 =finish
