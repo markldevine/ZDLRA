@@ -14,43 +14,30 @@ my %ZDLRAS;
 
 my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
 
-
-#   redis-cli KEYS "eb:zdlra:\*"
-#       eb:zdlra:CTF:computenodes
-#       eb:zdlra:CTF:storagecells
-#       eb:zdlra:EQX:computenodes
-#       eb:zdlra:EQX:storagecells
-
-
+my @all-compute-nodes;
 my @compute-node-keys       = $kv-server.KEYS(:key('eb:zdlra:*:computenodes'));
 die "No ZDLRA compute node keys!" unless @compute-node-keys;
 for @compute-node-keys -> $compute-node-key {
     my $site                = ($compute-node-key.split(':'))[2];
     %ZDLRAS{$site}<COMPUTENODES> = $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $site ~ ':computenodes')).list;
+    @all-compute-nodes.append(%ZDLRAS{$site}<COMPUTENODES>.flat);
 }
 
-ddt %ZDLRAS;
-
-=finish
-
+my @all-storage-cells;
 my @storage-cell-keys       = $kv-server.KEYS(:key('eb:zdlra:*:storagecells'));
-die "No ZDLRA storage cell keys!" unless @storage-cell-keys;
-
-
-my @compute-nodes;
-for @parent-keys -> $key {
-    my @vs                  = $kv-server.LRANGE(:$key, :0begin, :100end);
-    @compute-nodes.append:  @vs;
+die "No ZDLRA compute node keys!" unless @storage-cell-keys;
+for @storage-cell-keys -> $storage-cell-key {
+    my $site                = ($storage-cell-key.split(':'))[2];
+    %ZDLRAS{$site}<STORAGECELLS> = $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $site ~ ':storagecells')).list;
+    @all-storage-cells.append(%ZDLRAS{$site}<STORAGECELLS>.flat);
 }
-@compute-nodes             .= sort;
 
 my @cellcli-gateways;
-for @parent-keys -> $key {
-    @cellcli-gateways.push: ($kv-server.LRANGE(:$key, :0begin, :100end).sort)[0];
+for %ZDLRAS.keys.sort -> $site {
+    @cellcli-gateways.push: %ZDLRAS{$site}<COMPUTENODES>[0];
 }
-@cellcli-gateways          .= sort;
 
-my $compute-nodes           = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:@compute-nodes);
+my $compute-nodes           = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:compute-nodes(@all-compute-nodes));
 for $compute-nodes.Details.keys.sort -> $cn {
     put $cn;
     for $compute-nodes.Details{$cn} -> $rcds {
