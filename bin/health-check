@@ -1,5 +1,8 @@
 #!/usr/bin/env raku
 
+use JSON::Fast;
+use Our::Cache;
+
 #   dbmcli -n -m -e list alerthistory
 
 use lib $*HOME ~ '/github.com/ZDLRA/lib';
@@ -7,183 +10,110 @@ use ZDLRA::ComputeNode::PhysicalDisk::Details;
 use ZDLRA::StorageCell::PhysicalDisk::Details;
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
-
 use Data::Dump::Tree;
+
+constant INVENTORY-CACHE-KEY    = 'ZDLRA_inventory';
 
 my %ZDLRAS;
 
-my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+sub MAIN (
+    Int   :$log-days                = 0,           #= log days to display (bypass "only unseen logs" mechanism)
+    Int   :$refresh-inventory       = False,       #= clear inventory cache, consult KV store for site configuration
+) {
+    my @all-compute-nodes;
+    my @all-storage-cells;
+    my @cellcli-gateways;
 
-my @all-compute-nodes;
-my @compute-node-keys       = $kv-server.KEYS(:key('eb:zdlra:*:computenodes'));
-die "No ZDLRA compute node keys!" unless @compute-node-keys;
-for @compute-node-keys -> $compute-node-key {
-    my $site                = ($compute-node-key.split(':'))[2];
-    %ZDLRAS{$site}<COMPUTENODES> = $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $site ~ ':computenodes')).list;
-    @all-compute-nodes.append(%ZDLRAS{$site}<COMPUTENODES>.flat);
-}
+    my $inventory-cache             = Our::Cache.new(:identifier(INVENTORY-CACHE-KEY), :subdirs($*PROGRAM-NAME.IO.basename, INVENTORY-CACHE-KEY));
 
-my @all-storage-cells;
-my @storage-cell-keys       = $kv-server.KEYS(:key('eb:zdlra:*:storagecells'));
-die "No ZDLRA compute node keys!" unless @storage-cell-keys;
-for @storage-cell-keys -> $storage-cell-key {
-    my $site                = ($storage-cell-key.split(':'))[2];
-    %ZDLRAS{$site}<STORAGECELLS> = $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $site ~ ':storagecells')).list;
-    @all-storage-cells.append(%ZDLRAS{$site}<STORAGECELLS>.flat);
-}
+    if $refresh-inventory || !$inventory-cache.cache-hit {
+        my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+        my @compute-node-keys       = $kv-server.KEYS(:key('eb:zdlra:*:computenodes'));
+        die "No ZDLRA compute node keys!" unless @compute-node-keys;
+        for @compute-node-keys -> $compute-node-key {
+            my $zdlra               = ($compute-node-key.split(':'))[2];
+            for $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $zdlra ~ ':computenodes')).list -> $cn {
+                %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<ALERTHISTORY> = Array.new;
+                %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK> = Array.new;
+            }
+        }
+        my @storage-cell-keys       = $kv-server.KEYS(:key('eb:zdlra:*:storagecells'));
+        die "No ZDLRA compute node keys!" unless @storage-cell-keys;
+        for @storage-cell-keys -> $storage-cell-key {
+            my $zdlra               = ($storage-cell-key.split(':'))[2];
+            for $kv-server.SMEMBERS(:key('eb:zdlra:' ~ $zdlra ~ ':storagecells')).list -> $sc {
+                %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<ALERTHISTORY> = Array.new;
+                %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK> = Array.new;
+            }
+        }
+        $inventory-cache.store(:data(to-json(%ZDLRAS)));
+    }
+    else {
+        %ZDLRAS                     = from-json($inventory-cache.fetch);
+    }
 
-my @cellcli-gateways;
-for %ZDLRAS.keys.sort -> $site {
-    @cellcli-gateways.push: %ZDLRAS{$site}<COMPUTENODES>[0];
-}
+    my %entity2zdlra;
+    for %ZDLRAS.keys.sort -> $zdlra {
+        my @batch = %ZDLRAS{$zdlra}<COMPUTENODES>.keys.sort;
+        for @batch -> $cn {
+            %entity2zdlra{$cn} = $zdlra;
+        }
+        @all-compute-nodes.append: @batch;
 
-my $compute-nodes           = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:compute-nodes(@all-compute-nodes));
-for $compute-nodes.Details.keys.sort -> $cn {
-    put $cn;
-    for $compute-nodes.Details{$cn} -> $rcds {
-        for $rcds.list -> $rcd {
-            printf  "%12s%30s\n", $rcd.name, $rcd.status;
+        @cellcli-gateways.push: @batch[0];
+
+        @batch = %ZDLRAS{$zdlra}<STORAGECELLS>.keys.sort;
+        @all-storage-cells.append: @batch;
+        for @batch -> $sc {
+            %entity2zdlra{$sc} = $zdlra;
+        }
+    }
+
+    my $compute-nodes           = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:compute-nodes(@all-compute-nodes));
+    for $compute-nodes.Details.keys.sort -> $cn {
+        my $zdlra               = %entity2zdlra{$cn};
+        for $compute-nodes.Details{$cn} -> $rcds {
+            for $rcds.list -> $rcd {
+                %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK>.push: $rcd;
+            }
+        }
+    }
+
+    my $storage-cells   = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
+    for $storage-cells.Details.keys.sort -> $sc {
+        my $zdlra               = %entity2zdlra{$sc};
+        for $storage-cells.Details{$sc} -> $rcds {
+            for $rcds.list -> $rcd {
+                %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK>.push: $rcd;
+            }
+        }
+    }
+
+    for %ZDLRAS.keys -> $zdlra {
+        put $zdlra;
+        for %ZDLRAS{$zdlra}<COMPUTENODES>.keys.sort -> $cn {
+            put ' ' x 4 ~ $cn;
+            for %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK>.list -> $pd {
+                if $pd.status ne 'normal' {
+                    printf "%20s%30s\n", $pd.name, $pd.status;
+                }
+            }
+        }
+        for %ZDLRAS{$zdlra}<STORAGECELLS>.keys.sort -> $sc {
+            put ' ' x 4 ~ $sc;
+            for %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK>.list -> $pd {
+                if $pd.status ne 'normal' {
+                    printf "%20s%30s\n", $pd.name, $pd.status;
+                }
+            }
         }
     }
 }
-
-my $storage-cells   = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
-
-for $storage-cells.Details.keys.sort -> $sc {
-    put $sc;
-    for $storage-cells.Details{$sc} -> $rcds {
-        for $rcds.list -> $rcd {
-            printf  "%12s%30s\n", $rcd.name, $rcd.status;
-        }
-    }
-}
-
 =finish
 
-
-
-my %inventory;
 my %ah-dt-cache;
 my %status;
 my %command;
-my $id-prefix           = 'DateTime-Last-alerthistory-Record';
-
-my @redis-servers = slurp("$*HOME/.redis-servers").chomp.split("\n");
-
-my @redis-clis;
-for @redis-servers -> $redis-server {
-    my @cmd-string  = sprintf("ssh -L 127.0.0.1:6379:%s:6379 %s /usr/bin/redis-cli", $redis-server, $redis-server).split: /\s+/;
-    @redis-clis.push: @cmd-string;
-}
-
-my @z-keys;
-my @rcmd;
-my @redis-cli;
-for @redis-clis -> @r-cli {
-    @rcmd           = flat @r-cli,
-                      '--raw',
-                      'KEYS',
-                      'eb:zdlra:dbm:*';
-    my $proc        = run   @rcmd, :out, :err;
-    my $out         = $proc.out.slurp(:close);
-    my $err         = $proc.err.slurp(:close);
-    if $err {
-        warn 'FAILED: ' ~ @rcmd ~ "\t[" ~ $err ~ ']';
-        next;
-    }
-    if $out.chars {
-        if @z-keys = $out.chomp.split("\n") {
-            @redis-cli = @r-cli;
-            last;
-        }
-    }
-}
-die "No ZDLRA dbm keys!" unless @z-keys;
-
-for @z-keys -> $z-key {
-    my @rcmd        = flat @redis-cli,
-                        '--raw',
-                        'LINDEX',
-                        $z-key,
-                        '0';
-    my $proc        = run   @rcmd, :out, :err;
-    my $out         = $proc.out.slurp(:close);
-    my $err         = $proc.err.slurp(:close);
-    die $err    if $err;
-    die 'REDIS returned no VALUE for KEY ' ~ $z-key unless $out;
-    @ZDLRA-dbms.push: $out.chomp;
-}
-
-class ALERTHISTORY-RECORD {
-    has Str         $.name      is required;
-    has DateTime    $.datetime  is required;
-    has Str         $.severity  is required;
-    has Str         @.message;
-}
-
-my grammar ALERTHISTORY-GRAMMAR {
-    token TOP                   { <log-record>+                                                             }
-    token log-record            { <log-record-start> || <log-record-continue>                               }
-    token log-record-start      { ^^ <log-record-herald> \s+ <log-text>                                     }
-    token log-record-herald     { \s* <name> \s+ <datetime> \s+ <severity>                                  }
-    token log-record-continue   { ^^ <!before <log-record-herald>> <log-text>                               }
-    token name                  { \d+ '_' \d+                                                               }
-    token datetime              { \d\d\d\d '-' \d\d '-' \d\d 'T' \d\d ':' \d\d ':' \d\d '-' \d\d ':' \d\d   }
-    token severity              { \w+                                                                       }
-    token log-text              { .+? \n                                                                    }
-}
-
-class ALERTHISTORY-ACTIONS {
-    has Str $.dbm           is required;
-    has Str $.cell          is required;
-
-    method log-record-herald ($/) {
-        my $datetime        = DateTime.new(~$/<datetime>);
-        %inventory{$!dbm}<CELLS>{$!cell}<ALERTHISTORY>.push: ALERTHISTORY-RECORD.new(
-            :name(~$/<name>),
-            :$datetime,
-            :severity(~$/<severity>),
-        );
-        %ah-dt-cache{$!dbm}{$!cell} = $datetime if $datetime > %ah-dt-cache{$!dbm}{$!cell};
-    }
-
-    method log-text ($/) {
-        %inventory{$!dbm}<CELLS>{$!cell}<ALERTHISTORY>[* - 1].message.push: ~$/.chomp;
-    }
-}
-
-sub MAIN (
-    Int   :$log-days        = 0,               #= log days to display (bypass "only unseen logs" mechanism)
-) {
-    die                     unless @ZDLRA-dbms.elems;
-    %command                = ();
-
-################################################################################
-### ComputeNode PhysicalDisk Detail Check                                    ###
-################################################################################
-
-
-################################################################################
-### StorageCell PhysicalDisk Detail Check                                    ###
-################################################################################
-
-    for @ZDLRA-dbms -> $dbm {
-        %command{$dbm}      = 'ssh', $dbm, 'sudo', 'dcli', '-l', 'root', '-g', '/root/cell_group', '"cellcli -e list physicaldisk"';
-    }
-
-    my %physicaldisk        = Async::Command::Multi.new(:%command).sow.reap;
-
-    for %physicaldisk.keys.sort -> $dbm {
-        for %physicaldisk{$dbm}.stdout-results.lines -> $record {
-            my @fields      = $record.trim.split(/\s+/);
-            my $cell        = @fields[0].ends-with(':') ?? @fields[0].chop(1) !! @fields[0];
-            %inventory{$dbm}<CELLS>{$cell} = '';
-            %status{$dbm}<PHYSICALDISK>{$cell}.push: PHYSICALDISK_RECORD.new:
-                :name(@fields[1]),
-                :serial(@fields[2]),
-                :status(@fields[3..*].join(' '));
-        }
-    }
 
     my $identifier          = 'alerthistory_datetimes';
     my $ah-dt-cache         = Our::Cache.new(:$identifier);

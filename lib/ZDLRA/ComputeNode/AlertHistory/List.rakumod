@@ -1,5 +1,7 @@
 unit        class ZDLRA::ComputeNode::AlertHistory::List:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
+#   dbmcli -n -m -e list alerthistory
+
 use         JSON::Fast;
 
 use         ZDLRA::Common::AlertHistory::List::Actions;

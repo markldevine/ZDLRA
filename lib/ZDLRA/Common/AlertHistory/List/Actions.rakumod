@@ -2,8 +2,8 @@ unit    class ZDLRA::Common::AlertHistory::List::Actions:api<1>:auth<Mark Devine
 
 use     ZDLRA::Common::AlertHistory::List::Record;
 
-method TOP ($/)                 { make $<log-record>».made.Array;                                                       }
-method log-record-herald ($/)   { make { name     => ~$<name>, datetime => ~$<datetime>, severity => ~$<severity>, };   }
+method TOP ($/)                 { make $<log-record>».made.Array;                                                   }
+method log-record-herald ($/)   { make { name => ~$<name>, datetime => ~$<datetime>, severity => ~$<severity>, };   }
 
 method log-record ($/)          {
     my %herald = $<log-record-herald>.made;
