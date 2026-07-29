@@ -12,7 +12,8 @@ use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
 use Data::Dump::Tree;
 
-constant INVENTORY-CACHE-KEY    = 'ZDLRA_inventory';
+constant ZDLRA-INVENTORY-CI         = 'ZDLRA_INVENTORY';
+constant ALERTHISTORY-DATETIMES-CI  = 'ALERTHISTORY_LIST';
 
 my %ZDLRAS;
 
@@ -20,14 +21,19 @@ sub MAIN (
     Int   :$log-days                = 0,           #= log days to display (bypass "only unseen logs" mechanism)
     Int   :$refresh-inventory       = False,       #= clear inventory cache, consult KV store for site configuration
 ) {
+
+################################################################################
+###                             ZDLRA Inventory                              ###
+################################################################################
+
     my @all-compute-nodes;
     my @all-storage-cells;
     my @cellcli-gateways;
 
-    my $inventory-cache             = Our::Cache.new(:identifier(INVENTORY-CACHE-KEY), :subdirs($*PROGRAM-NAME.IO.basename, INVENTORY-CACHE-KEY));
+    my $inventory-cache             = Our::Cache.new(:identifier(ZDLRA-INVENTORY-CI), :subdirs($*PROGRAM-NAME.IO.basename, ZDLRA-INVENTORY-CI));
 
     if $refresh-inventory || !$inventory-cache.cache-hit {
-        my $kv-server               = Our::KV.new(:kv-cli('/usr/bin/redis-cli'), :local-port-forward);
+        my $kv-server               = Our::KV.new(:kv-server('jgstmgtgate1lpv.wmata.local'), :kv-cli('/usr/bin/redis-cli'), :local-port-forward);
         my @compute-node-keys       = $kv-server.KEYS(:key('eb:zdlra:*:computenodes'));
         die "No ZDLRA compute node keys!" unless @compute-node-keys;
         for @compute-node-keys -> $compute-node-key {
@@ -69,54 +75,77 @@ sub MAIN (
         }
     }
 
-    my $compute-nodes           = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:compute-nodes(@all-compute-nodes));
-    for $compute-nodes.Details.keys.sort -> $cn {
-        my $zdlra               = %entity2zdlra{$cn};
-        for $compute-nodes.Details{$cn} -> $rcds {
-            for $rcds.list -> $rcd {
-                %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK>.push: $rcd;
-            }
-        }
-    }
+################################################################################
+###                         PHYSICALDISK reporting                           ###
+################################################################################
 
-    my $storage-cells   = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
-    for $storage-cells.Details.keys.sort -> $sc {
-        my $zdlra               = %entity2zdlra{$sc};
-        for $storage-cells.Details{$sc} -> $rcds {
-            for $rcds.list -> $rcd {
-                %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK>.push: $rcd;
-            }
-        }
-    }
-
-    for %ZDLRAS.keys -> $zdlra {
-        put $zdlra;
-        for %ZDLRAS{$zdlra}<COMPUTENODES>.keys.sort -> $cn {
-            put ' ' x 4 ~ $cn;
-            for %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK>.list -> $pd {
-                if $pd.status ne 'normal' {
-                    printf "%20s%30s\n", $pd.name, $pd.status;
+    sub get-physical-disks () {
+        my $compute-nodes   = ZDLRA::ComputeNode::PhysicalDisk::Details.new(:compute-nodes(@all-compute-nodes));
+        for $compute-nodes.Details.keys.sort -> $cn {
+            my $zdlra       = %entity2zdlra{$cn};
+            for $compute-nodes.Details{$cn} -> $rcds {
+                for $rcds.list -> $rcd {
+                    %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK>.push: $rcd;
                 }
             }
         }
-        for %ZDLRAS{$zdlra}<STORAGECELLS>.keys.sort -> $sc {
-            put ' ' x 4 ~ $sc;
-            for %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK>.list -> $pd {
-                if $pd.status ne 'normal' {
-                    printf "%20s%30s\n", $pd.name, $pd.status;
+
+        my $storage-cells   = ZDLRA::StorageCell::PhysicalDisk::Details.new(:@cellcli-gateways);
+        for $storage-cells.Details.keys.sort -> $sc {
+            my $zdlra       = %entity2zdlra{$sc};
+            for $storage-cells.Details{$sc} -> $rcds {
+                for $rcds.list -> $rcd {
+                    %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK>.push: $rcd;
                 }
             }
         }
     }
+
+    sub report-on-physical-disks () {
+        get-physical-disks();
+        for %ZDLRAS.keys -> $zdlra {
+            put $zdlra;
+            for %ZDLRAS{$zdlra}<COMPUTENODES>.keys.sort -> $cn {
+                put ' ' x 4 ~ $cn;
+                for %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<PHYSICALDISK>.list -> $pd {
+                    if $pd.status ne 'normal' {
+                        printf "%20s%30s\n", $pd.name, $pd.status;
+                    }
+                }
+            }
+            for %ZDLRAS{$zdlra}<STORAGECELLS>.keys.sort -> $sc {
+                put ' ' x 4 ~ $sc;
+                for %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<PHYSICALDISK>.list -> $pd {
+                    if $pd.status ne 'normal' {
+                        printf "%20s%30s\n", $pd.name, $pd.status;
+                    }
+                }
+            }
+        }
+    }
+
+################################################################################
+###                         ALERTHISTORY reporting                           ###
+################################################################################
+
+    sub get-alert-history () {
+        put 'NYI';
+    }
+
+    sub report-on-alert-history () {
+        get-alert-history();
+    }
+
+#report-on-physical-disks();
+report-on-alert-history();
+
 }
 =finish
 
-my %ah-dt-cache;
 my %status;
 my %command;
 
-    my $identifier          = 'alerthistory_datetimes';
-    my $ah-dt-cache         = Our::Cache.new(:$identifier);
+    my $ah-dt-cache         = Our::Cache.new(:identifier(ALERTHISTORY-DATETIMES-CI), :subdirs($*PROGRAM-NAME.IO.basename, ALERTHISTORY-DATETIMES-CI));
 
     if ! $log-days && $ah-dt-cache.cache-hit {
         %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
