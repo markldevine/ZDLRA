@@ -7,7 +7,7 @@ method log-record-herald ($/)   { make { name => ~$<name>, datetime => ~$<dateti
 
 method log-record ($/)          {
     my %herald = $<log-record-herald>.made;
-    my @message = $<first-message-line>.Str, |($<message-line>».Str);
+    my @message = $<first-message-line>.Str.trim, |($<message-line>».Str.trim);
     make ZDLRA::Common::AlertHistory::List::Record.new(|%herald, message => @message);
 }
 

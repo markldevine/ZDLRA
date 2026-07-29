@@ -8,12 +8,14 @@ use Our::Cache;
 use lib $*HOME ~ '/github.com/ZDLRA/lib';
 use ZDLRA::ComputeNode::PhysicalDisk::Details;
 use ZDLRA::StorageCell::PhysicalDisk::Details;
+use ZDLRA::ComputeNode::AlertHistory::List;
+use ZDLRA::StorageCell::AlertHistory::List;
 use lib '/home/mdevine/github.com/raku-Our-KV/lib';
 use Our::KV;
 use Data::Dump::Tree;
 
 constant ZDLRA-INVENTORY-CI         = 'ZDLRA_INVENTORY';
-constant ALERTHISTORY-DATETIMES-CI  = 'ALERTHISTORY_LIST';
+#constant ALERTHISTORY-DATETIMES-CI  = 'ALERTHISTORY_LIST';
 
 my %ZDLRAS;
 
@@ -129,11 +131,31 @@ sub MAIN (
 ################################################################################
 
     sub get-alert-history () {
-        put 'NYI';
+        my $compute-nodes   = ZDLRA::ComputeNode::AlertHistory::List.new(:compute-nodes(@all-compute-nodes));
+        for $compute-nodes.List.keys.sort -> $cn {
+            my $zdlra       = %entity2zdlra{$cn};
+            for $compute-nodes.List{$cn} -> $rcds {
+                for $rcds.list -> $rcd {
+                    %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<ALERTHISTORY>.push: $rcd;
+                }
+            }
+        }
+
+#       my $storage-cells   = ZDLRA::StorageCell::AlertHistory::List.new(:@cellcli-gateways);
+#       for $storage-cells.List.keys.sort -> $sc {
+#           my $zdlra       = %entity2zdlra{$sc};
+#           for $storage-cells.List{$sc} -> $rcds {
+#               for $rcds.list -> $rcd {
+#                   %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<ALERTHISTORY>.push: $rcd;
+#               }
+#           }
+#       }
     }
 
     sub report-on-alert-history () {
         get-alert-history();
+put 'dumping...';
+ddt %ZDLRAS;
     }
 
 #report-on-physical-disks();
