@@ -42,9 +42,11 @@ submethod TWEAK {
 #jgz1celadm01: This alert will be cleared when file system / becomes less than 75% full.
 
     my %logs;
-    for %results.keys.sort -> $storage-cell {
-        my ($storage-cell, $text)   = split(':', 2);
-        $logs{$storage-cell} ~= $text;
+    for %results.keys.sort -> $cell-gateway {
+        for %results{$cell-gateway}.stdout-results.lines -> $line {
+            my ($storage-cell, $text)   = $line.split(':', 2);
+            $logs{$storage-cell} ~= $text;
+        }
     }
 
     for %logs.keys.sort -> $storage-cell {
