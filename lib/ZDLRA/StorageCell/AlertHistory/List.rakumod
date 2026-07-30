@@ -6,31 +6,32 @@ use             ZDLRA::Common::AlertHistory::List::Grammar;
 use             ZDLRA::Common::AlertHistory::List::Record;
 use             Async::Command::Multi;
 
-has             @.cell-gateways     is required;
+has             @.cellcli-gateways  is required;
 has DateTime    $.begin-datetime    is required;
 has             %.List;
 
 submethod TWEAK {
     my %command;
-    for @!cell-gateways -> $cell-gateway {
-        %command{$cell-gateway} =   'ssh',
-                                    $cell-gateway,
-                                    'sudo',
-                                    '-n',
-                                    '/usr/bin/dcli',
-                                    '-l',
-                                    'root',
-                                    '-g',
-                                    '/root/cell_group',
-                                    'cellcli',
-                                    '-e',
-                                    'list',
-                                    'alerthistory',
-#                                   'WHERE',
-#                                   'begintime',
-#                                   '\\>',
-#                                   "\\'" ~ $!begin-datetime ~ "\\'",
-                                    ;
+    for @!cellcli-gateways -> $cellcli-gateway {
+        %command{$cellcli-gateway}  =
+                                        'ssh',
+                                        $cellcli-gateway,
+                                        'sudo',
+                                        '-n',
+                                        '/usr/local/bin/dcli',
+                                        '-l',
+                                        'root',
+                                        '-g',
+                                        '/root/cell_group',
+                                        'cellcli',
+                                        '-e',
+                                        'list',
+                                        'alerthistory',
+#                                       'WHERE',
+#                                       'begintime',
+#                                       '\\>',
+#                                       "\\'" ~ $!begin-datetime ~ "\\'",
+                                        ;
     }
     my %results                     = Async::Command::Multi.new(:%command).sow.reap;
 
@@ -41,11 +42,13 @@ submethod TWEAK {
 #jgz1celadm01: 2_1    2026-07-13T15:01:23-04:00    critical    After initial accelerated space reclamation,
 #jgz1celadm01: This alert will be cleared when file system / becomes less than 75% full.
 
+
     my %logs;
-    for %results.keys.sort -> $cell-gateway {
-        for %results{$cell-gateway}.stdout-results.lines -> $line {
+    for %results.keys.sort -> $cellcli-gateway {
+        for %results{$cellcli-gateway}.stdout-results.lines -> $line {
             my ($storage-cell, $text)   = $line.split(':', 2);
-            $logs{$storage-cell} ~= $text;
+die '$storage-cell, $text = ' ~ $storage-cell ~ ", " ~ $text;
+            %logs{$storage-cell} ~= $text;
         }
     }
 

@@ -137,109 +137,43 @@ sub MAIN (
         my $ah-dt-cache = Our::Cache.new(:identifier(ALERTHISTORY-DATETIMES-CI), :subdirs($*PROGRAM-NAME.IO.basename, ALERTHISTORY-DATETIMES-CI));
         my DateTime $begin-datetime = DateTime.new(:timezone($*TZ), ($initialization-instant - (365 * 24 * 60 * 60))).truncated-to('second');
 
-        if $!log-days {
-            $begin-datetime = DateTime.new(:timezone($*TZ), ($initialization-instant - ($!log-days * 24 * 60 * 60))).truncated-to('second');
+        if $log-days {
+            $begin-datetime = DateTime.new(:timezone($*TZ), ($initialization-instant - ($log-days * 24 * 60 * 60))).truncated-to('second');
         }
         elsif $ah-dt-cache.cache-hit {
             $begin-datetime = DateTime.new($ah-dt-cache.fetch) or note $?LINE;
         }
         $ah-dt-cache.store(:data($begin-datetime.Str));
 
-        my $compute-nodes   = ZDLRA::ComputeNode::AlertHistory::List.new(:compute-nodes(@all-compute-nodes), :$begin-datetime);
-        for $compute-nodes.List.keys.sort -> $cn {
-            my $zdlra       = %entity2zdlra{$cn};
-            for $compute-nodes.List{$cn} -> $rcds {
-                for $rcds.list -> $rcd {
-                    %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<ALERTHISTORY>.push: $rcd;
-                }
-            }
-        }
-
-#       my $storage-cells   = ZDLRA::StorageCell::AlertHistory::List.new(:@cellcli-gateways);
-#       for $storage-cells.List.keys.sort -> $sc {
-#           my $zdlra       = %entity2zdlra{$sc};
-#           for $storage-cells.List{$sc} -> $rcds {
+#       my $compute-nodes   = ZDLRA::ComputeNode::AlertHistory::List.new(:compute-nodes(@all-compute-nodes), :$begin-datetime);
+#       for $compute-nodes.List.keys.sort -> $cn {
+#           my $zdlra       = %entity2zdlra{$cn};
+#           for $compute-nodes.List{$cn} -> $rcds {
 #               for $rcds.list -> $rcd {
-#                   %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<ALERTHISTORY>.push: $rcd;
+#                   %ZDLRAS{$zdlra}<COMPUTENODES>{$cn}<ALERTHISTORY>.push: $rcd;
 #               }
 #           }
 #       }
+
+        my $storage-cells   = ZDLRA::StorageCell::AlertHistory::List.new(:@cellcli-gateways, :$begin-datetime);
+        for $storage-cells.List.keys.sort -> $sc {
+            my $zdlra       = %entity2zdlra{$sc};
+            for $storage-cells.List{$sc} -> $rcds {
+                for $rcds.list -> $rcd {
+                    %ZDLRAS{$zdlra}<STORAGECELLS>{$sc}<ALERTHISTORY>.push: $rcd;
+                }
+            }
+        }
     }
 
     sub report-on-alert-history () {
         get-alert-history();
 put 'dumping...';
-ddt %ZDLRAS;
+dd %ZDLRAS;
     }
 
 #report-on-physical-disks();
 report-on-alert-history();
 
 }
-=finish
-
-my %status;
-my %command;
-
-    my $ah-dt-cache         = Our::Cache.new(:identifier(ALERTHISTORY-DATETIMES-CI), :subdirs($*PROGRAM-NAME.IO.basename, ALERTHISTORY-DATETIMES-CI));
-
-    if ! $log-days && $ah-dt-cache.cache-hit {
-        %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
-        for %ah-dt-cache.keys.sort -> $dbm {
-            for %ah-dt-cache{$dbm}.keys.sort -> $cell {
-                %ah-dt-cache{$dbm}{$cell} = DateTime.new: %ah-dt-cache{$dbm}{$cell};
-            }
-        }
-    }
-    else {
-        my $first-log       = now - (365 * 24 * 60 * 60);
-        $first-log          = now - ($log-days * 24 * 60 * 60) if $log-days;
-        my $first-dt        = DateTime.new(:timezone($*TZ), $first-log).truncated-to('second');
-        for %inventory.keys.sort -> $dbm {
-            for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-                %ah-dt-cache{$dbm}{$cell} = $first-dt.clone;
-            }
-        }
-        $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
-    }
-
-    %command                = ();
-    for %inventory.keys -> $dbm {
-        for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-            %command{$cell} = (
-                                'ssh',
-                                $dbm,
-                                'sudo',
-                                'ssh',
-                                $cell,
-                                Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ %ah-dt-cache{$dbm}{$cell}.Str ~ Q/\\'"/,
-                            );
-        }
-    }
-
-    my %alerthistory        = Async::Command::Multi.new(:%command).sow.reap;
-
-    for %inventory.keys -> $dbm {
-        for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-            ALERTHISTORY-GRAMMAR.parse(%alerthistory{$cell}.stdout-results, :actions(ALERTHISTORY-ACTIONS.new(:$dbm, :$cell)));
-        }
-    }
-    $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
-
-    for %inventory.keys -> $dbm {
-        put $dbm;
-        for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-            put "\t" ~ $cell;
-            for %status{$dbm}<PHYSICALDISK>{$cell}.list -> $pd {
-                printf "\t\t%s\t%s [%s]\n", $pd.status, $pd.name, $pd.serial if $pd.status ne 'normal';
-            }
-            if (%status{$dbm}<ALERTHISTORY>:exists) && (%status{$dbm}<ALERTHISTORY>{$cell}:exists) {
-                for %status{$dbm}<ALERTHISTORY>{$cell}.list -> $logrcd {
-                    printf "\t\t%s %s %s\n", $logrcd.datetime, $logrcd.severity, $logrcd.message;
-                }
-            }
-        }
-    }
-}
-
 =finish
