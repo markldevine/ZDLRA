@@ -15,9 +15,12 @@ use Our::KV;
 use Data::Dump::Tree;
 
 constant ZDLRA-INVENTORY-CI         = 'ZDLRA_INVENTORY';
-#constant ALERTHISTORY-DATETIMES-CI  = 'ALERTHISTORY_LIST';
+constant ALERTHISTORY-DATETIMES-CI  = 'ALERTHISTORY_LIST';
 
 my %ZDLRAS;
+
+my $initialization-instant;
+INIT    { $initialization-instant   = now; }
 
 sub MAIN (
     Int   :$log-days                = 0,           #= log days to display (bypass "only unseen logs" mechanism)
@@ -131,7 +134,18 @@ sub MAIN (
 ################################################################################
 
     sub get-alert-history () {
-        my $compute-nodes   = ZDLRA::ComputeNode::AlertHistory::List.new(:compute-nodes(@all-compute-nodes));
+        my $ah-dt-cache = Our::Cache.new(:identifier(ALERTHISTORY-DATETIMES-CI), :subdirs($*PROGRAM-NAME.IO.basename, ALERTHISTORY-DATETIMES-CI));
+        my DateTime $begin-datetime = DateTime.new(:timezone($*TZ), ($initialization-instant - (365 * 24 * 60 * 60))).truncated-to('second');
+
+        if $!log-days {
+            $begin-datetime = DateTime.new(:timezone($*TZ), ($initialization-instant - ($!log-days * 24 * 60 * 60))).truncated-to('second');
+        }
+        elsif $ah-dt-cache.cache-hit {
+            $begin-datetime = DateTime.new($ah-dt-cache.fetch) or note $?LINE;
+        }
+        $ah-dt-cache.store(:data($begin-datetime.Str));
+
+        my $compute-nodes   = ZDLRA::ComputeNode::AlertHistory::List.new(:compute-nodes(@all-compute-nodes), :$begin-datetime);
         for $compute-nodes.List.keys.sort -> $cn {
             my $zdlra       = %entity2zdlra{$cn};
             for $compute-nodes.List{$cn} -> $rcds {

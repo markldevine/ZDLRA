@@ -1,95 +1,57 @@
-unit        class ZDLRA::StorageCell::AlertHistory::List:api<1>:auth<Mark Devine (mark@markdevine.com)>;
+unit class ZDLRA::StorageCell::AlertHistory::List:api<1>:auth<Mark Devine (mark@markdevine.com)>;
 
-use         JSON::Fast;
-use         ZDLRA::Common::AlertHistory::List::Actions;
-use         ZDLRA::Common::AlertHistory::List::Grammar;
-use         ZDLRA::Common::AlertHistory::List::Record;
-use         Async::Command::Multi;
-use         Our::Cache;
+use             JSON::Fast;
+use             ZDLRA::Common::AlertHistory::List::Actions;
+use             ZDLRA::Common::AlertHistory::List::Grammar;
+use             ZDLRA::Common::AlertHistory::List::Record;
+use             Async::Command::Multi;
 
-constant ALERTHISTORY-DATETIMES-CI  = 'STORAGECELL_ALERTHISTORY_LIST';
-
-#   for @!storage-cells -> $storage-cell {
-#       %command{$storage-cell} =   'ssh',
-#                                   $storage-cell,
-#                                   'sudo',
-#                                   Q/"cellcli -e list alerthistory WHERE begintime \\> \\'/ ~ %ah-dt-cache{$storage-cell}.Str ~ Q/\\'"/,
-#                                   ;
-#   for %results.keys.sort -> $storage-cell {
-#       my $actions                 = ZDLRA::Common::AlertHistory::List::Actions.new;
-#       %!List{$storage-cell}       = ZDLRA::Common::AlertHistory::List::Grammar.parse(%results{$storage-cell}.stdout-results, :$actions).made;
-#   }
-
-#-------------------------------------------------------------------------------
-#   for %inventory.keys -> $dbm {
-#       for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-#           ALERTHISTORY-GRAMMAR.parse(%alerthistory{$cell}.stdout-results, :actions(ALERTHISTORY-ACTIONS.new(:$dbm, :$cell)));
-#       }
-#   }
-#   $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
-
-#-------------------------------------------------------------------------------
-
-has $.cell-gateway  is required;
-has @.storage-cells is required;
-has $.log-days      = 1; #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-has %.List;
+has             @.cell-gateways     is required;
+has DateTime    $.begin-datetime    is required;
+has             %.List;
 
 submethod TWEAK {
-    my %ah-dt-cache;
-    my $ah-dt-cache = Our::Cache.new(:identifier(ALERTHISTORY-DATETIMES-CI), :subdirs($*PROGRAM-NAME.IO.basename, ALERTHISTORY-DATETIMES-CI));
-
-    if ! $!log-days && $ah-dt-cache.cache-hit {
-        %ah-dt-cache        = from-json($ah-dt-cache.fetch) or note $?LINE;
-        for %ah-dt-cache.keys.sort -> $storage-cell {
-            %ah-dt-cache{$storage-cell} = DateTime.new: %ah-dt-cache{$storage-cell};
-        }
-    }
-    else {
-        my $first-log       = now - (365 * 24 * 60 * 60);
-        $first-log          = now - ($!log-days * 24 * 60 * 60) if $!log-days;
-        my $first-dt        = DateTime.new(:timezone($*TZ), $first-log).truncated-to('second');
-        for @!storage-cells -> $storage-cell {
-            %ah-dt-cache{$storage-cell} = $first-dt.clone;
-        }
-        $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
-    }
-
     my %command;
-    for @!storage-cells -> $storage-cell {
-        %command{$storage-cell} =   'ssh',
-                                    $storage-cell,
+    for @!cell-gateways -> $cell-gateway {
+        %command{$cell-gateway} =   'ssh',
+                                    $cell-gateway,
                                     'sudo',
                                     '-n',
-                                    '/usr/bin/dbmcli',
-                                    '-n',
-                                    '-m',
+                                    '/usr/bin/dcli',
+                                    '-l',
+                                    'root',
+                                    '-g',
+                                    '/root/cell_group',
+                                    'cellcli',
                                     '-e',
                                     'list',
                                     'alerthistory',
-                                    'WHERE',
-                                    'begintime',
-                                    '\\>',
-                                    "\\'" ~ %ah-dt-cache{$storage-cell}.Str ~ "\\'",
+#                                   'WHERE',
+#                                   'begintime',
+#                                   '\\>',
+#                                   "\\'" ~ $!begin-datetime ~ "\\'",
                                     ;
-put %command{$storage-cell};
+    }
+    my %results                     = Async::Command::Multi.new(:%command).sow.reap;
+
+
+#jgz1celadm02: /opt/oracle.cellos/HWFWCheckUtil/content/ActualFirmwareFiles/ILOM-5_1_5_22_b_r166343-ORAC
+#jgz1celadm02: 3_2    2026-07-13T15:31:10-04:00    clear       File system / is 63% full, which is below 
+#jgz1celadm01: 1_1    2025-07-16T22:08:51-04:00    warning     Diagnostic packages for Service Requests wi
+#jgz1celadm01: 2_1    2026-07-13T15:01:23-04:00    critical    After initial accelerated space reclamation,
+#jgz1celadm01: This alert will be cleared when file system / becomes less than 75% full.
+
+    my %logs;
+    for %results.keys.sort -> $storage-cell {
+        my ($storage-cell, $text)   = split(':', 2);
+        $logs{$storage-cell} ~= $text;
     }
 
-    my %results                     = Async::Command::Multi.new(:%command).sow.reap;
-    for %results.keys.sort -> $storage-cell {
+    for %logs.keys.sort -> $storage-cell {
         my $actions                 = ZDLRA::Common::AlertHistory::List::Actions.new;
-        %!List{$storage-cell}       = ZDLRA::Common::AlertHistory::List::Grammar.parse(%results{$storage-cell}.stdout-results, :$actions).made;
+        %!List{$storage-cell}       = ZDLRA::Common::AlertHistory::List::Grammar.parse(%logs{$storage-cell}, :$actions).made;
 put %!List{$storage-cell}.elems;
-note '$ah-dt-cache.store(:data(to-json(%ah-dt-cache)));';
     }
 }
 
-#-------------------------------------------------------------------------------
-#   for %inventory.keys -> $dbm {
-#       for %inventory{$dbm}<CELLS>.keys.sort -> $cell {
-#           ALERTHISTORY-GRAMMAR.parse(%alerthistory{$cell}.stdout-results, :actions(ALERTHISTORY-ACTIONS.new(:$dbm, :$cell)));
-#       }
-#   }
-#   $ah-dt-cache.store(:data(to-json(%ah-dt-cache)));
-
-#-------------------------------------------------------------------------------
+=finish
